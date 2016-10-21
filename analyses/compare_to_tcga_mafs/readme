@@ -1,4 +1,10 @@
-# Goal: Grab latest MAFs from Firehose, reannotatate in the same way as Genie, and do some comparisons
+# GOAL: Grab latest MAFs from Firehose, reannotatate the same way as Genie, and do some comparisons
+
+## --------------------------------------- ##
+## Download and re-annotation of TCGA MAFs ##
+## --------------------------------------- ##
+
+::NOTE:: You can skip this section if you just want to proceed with the re-annotated MAFs
 
 # Fetch the firehose_get tool:
 wget -P bin http://gdac.broadinstitute.org/runs/code/firehose_get_latest.zip
@@ -29,3 +35,16 @@ rm -rf mafs/{COAD,READ}
 ls mafs/*/*.maf.txt | perl -ne 'chomp; ($s)=m/^(.*TCGA-\w\w-\w{4}-\d\d)/; print "bsub -oo $s.vep.log -We 00:59 /opt/common/CentOS_6-dev/perl/perl-5.22.0/bin/perl /opt/common/CentOS_6-dev/vcf2maf/v1.6.10/maf2maf.pl --input-maf $_ --output-maf $s.vep.maf --custom-enst /opt/common/CentOS_6-dev/vcf2maf/v1.6.10/data/isoform_overrides_uniprot --vep-path /opt/common/CentOS_6-dev/vep/v86 --vep-data /opt/common/CentOS_6-dev/vep/v86 --ref-fasta /opt/common/CentOS_6-dev/vep/v86/homo_sapiens/86_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz --retain-cols Center,Verification_Status,Validation_Status,Mutation_Status,Sequencing_Phase,Sequence_Source,Validation_Method,Score,BAM_file,Sequencer,Tumor_Sample_UUID,Matched_Norm_Sample_UUID,ref_context,i_dbNSFP_MutationAssessor_pred,i_dbNSFP_MutationAssessor_rankscore,i_dbNSFP_MutationAssessor_score,i_dbNSFP_MutationTaster_converted_rankscore,i_dbNSFP_MutationTaster_pred,i_dbNSFP_MutationTaster_score\n" unless(-s "$s.vep.maf")' | bash
 
 # Concatenate MAFs of the same tumor type, to create per-tumor MAF:
+ls -d mafs/* | perl -ne 'chomp; ($t)=m/(\w+)$/; $tl=lc($t); $mf="mafs/tcga_$tl\_071516.vep.maf"; print "grep -h ^Hugo $_/*.vep.maf | head -n1 > $mf\ngrep -hEv \"^#|^Hugo\" $_/*.vep.maf >> $mf\n"' | bash
+
+# Tarball it and upload to Synapse:
+tar -zcf tcga_firehose_vep_mafs_071516.tar.gz readme mafs/*.vep.maf
+synapse add --parentid syn4301332 --name tcga_firehose_vep_mafs_071516.tar.gz --description "TCGA Firehose MAFs re-annotated with maf2maf" tcga_firehose_vep_mafs_071516.tar.gz
+
+## ------------------ ##
+## TCGA vs Genie MAFs ##
+## ------------------ ##
+
+# Download and unpack the tarball prepared above, unless you already did all that stuff above:
+synapse get syn7421111
+tar -zxf tcga_firehose_vep_mafs_071516.tar.gz

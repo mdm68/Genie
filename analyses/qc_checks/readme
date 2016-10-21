@@ -1,5 +1,7 @@
-# Currently using uniprot canonical isoforms. Ensure it represents what most people expect in literature
+# Currently using uniprot canonical isoforms. Ensure it represents protein changes that most people expect, per literature
 
 # Check for variants that might have been from older/wrong genome build
 
 # Check for any variants that are seen in Broad's list of false-positives based on genotyping exome-seq from 8000 TCGA normals
+
+# Check for di-nucleotide polymorphisms or other complex events that are incorrectly reported as distinct events
