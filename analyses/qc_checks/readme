@@ -1,0 +1,5 @@
+# Currently using uniprot canonical isoforms. Ensure it represents what most people expect in literature
+
+# Check for variants that might have been from older/wrong genome build
+
+# Check for any variants that are seen in Broad's list of false-positives based on genotyping exome-seq from 8000 TCGA normals
