@@ -2,20 +2,20 @@
 
 ## Introduction
 
-This repo documents code used to gather, QC, and standardize data uploaded by participating sites for AACR's Project GENIE (Genomics, Evidence, Neoplasia, Information, Exchange). Follow instructions below to create and populate a folder for `data`. And then review the contents of the `analyses` folder, which contains a subfolder each, for various analyses that could be performed on those datasets.
+This repository documents code used to gather, QC, standardize, and analyze data uploaded by institutes participating in AACR's Project GENIE (Genomics, Evidence, Neoplasia, Information, Exchange). Follow instructions below to download and populate the folder `data` with the core Genie dataset. And then review the contents of the `analyses` folder, which contains a sub-folder each, for various analyses that can be performed on those datasets.
 
 ## Dependencies
 
 These are tools or packages you will need, to be able to reproduce these results:
-- A Linux machine or a cluster of compute nodes with a job scheduler like `LSF` or `SGE`
+- A Linux machine or a cluster of compute nodes with a job scheduler like LSF (`bsub`) or SGE (`qsub`)
 - Python 2.7.10 or higher
 - Sage Synapse's [command-line client](http://python-docs.synapse.org/CommandLineClient.html) (`pip install synapseclient`)
 
 ## Fetch Data
 
-Download cBioPortal data into a subfolder named `data/cbioportal`:
+Download the core dataset into `data/cbioportal`. This data feeds the web-based UI at [cbioportal.org/genie](http://www.cbioportal.org/genie/):
 ```bash
-synapse -u <username> -p <password> get -r --downloadLocation data/cbioportal syn5521835
+synapse get -r --downloadLocation data/cbioportal syn5521835
 ```
 
 ## Reporting bugs
