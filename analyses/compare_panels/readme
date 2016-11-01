@@ -1,0 +1,32 @@
+# GOAL: Ensure comparable gene names across panels, compare BED file loci, etc.
+
+# First, gather the gene names used across institutes, from the files shared with the portal:
+mkdir gene_lists
+cp ../../data/cbioportal/{DFCI-ONCOPANEL-1,DFCI-ONCOPANEL-2,GRCC_CHP2,GRCC_CP1,GRCC_MOSC3,GRCC_SAFIR02,JHH-50GP-V1,MDA-46-V1,MDA-50-V1,MSK-IMPACT341,MSK-IMPACT410,NKI-TSACP,UHN-48-V1,VICC-01-D2,VICC-01-R2,VICC-01-T4b,VICC-01-T5a,VICC-01-T6b,VICC-01-T7}.txt gene_lists/
+
+# Turn them all into FLAT files with 1 gene per line:
+perl -i -pe 's/(\t|$)/\n/g; $_="" unless(m/^gene_list/); s/^gene_list:\s+//' gene_lists/*.txt
+
+# Use data downloaded from genenames.org to HUGO-ify all the names:
+# ::NOTE:: Given chrom names, use "bin/update_gene_names.pl" which can solve more ambiguities
+ls gene_lists/*.txt | xargs -L1 -I% perl bin/update_gene_names_dunno_chrom.pl % 0
+
+# List out the gene names that were updated:
+ls gene_lists/*.txt | perl -ne 'chomp; print `sdiff -bBWs $_ $_\_hugoified`'
+
+MLL      | KMT2A
+MLL2     | KMT2D
+MLL3     | KMT2C
+MYCL1    | MYCL
+GNB2L1   | RACK1
+FAM123B  | AMER1
+MRE11A   | MRE11
+PAK7     | PAK5
+C11orf30 | EMSY
+MLLT4    | AFDN
+
+# ::NOTE:: There was only 1 gene name "WG" that it couldn't disambiguate. No idea what that is.
+# If we look at the BED files, we can figure it out.
+
+# Replace the original gene lists with the HUGO-ified gene lists:
+ls gene_lists/*.txt | perl -ne 'chomp; print `mv $_\_hugoified $_`'

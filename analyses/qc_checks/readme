@@ -1,5 +1,82 @@
-# Currently using uniprot canonical isoforms. Ensure it represents what most people expect in literature
+# GOAL: Document various minor/major ad-hoc QC checks that happened across the AACR Genie Project
 
-# Check for variants that might have been from older/wrong genome build
+# ::TODO:: These are are either not done, not documented yet, or not important enough to do:
+# - Currently using uniprot canonical isoforms. Ensure it represents protein changes that most people expect, per literature
+# - Check for di-nucleotide polymorphisms or other complex events that are incorrectly reported as distinct events
+# - Check for variants that might have been from older/wrong genome build, by comparing reference alleles to FASTA files
+# - Moar? Yes moar coming.
 
-# Check for any variants that are seen in Broad's list of false-positives based on genotyping exome-seq from 8000 TCGA normals
+# --------- #
+# Mutations #
+# --------- #
+
+# DATE: Oct 31, 2016
+
+# ::NOTE:: Here, we want to QC the mutation data uploaded by the participating cancer centers,
+# figure out the formats they've attempted to adhere to, if at all, and document how we can extract
+# maximum data with minimal ad-hoc code. Ideally, we just need each file to be parseable by vcf2maf
+# or maf2maf, and leave it to standardize and re-annotate the mutation data
+
+# Fetch all the raw mutation data from Synapse (for Sage personnel/contractors only):
+export MUTS="../../data/mutations"
+synapse get -r --downloadLocation $MUTS syn7368728
+
+# Netherlands Cancer Institute (GENIE-NKI-*.vcf)
+
+# ::NOTE:: From manual review of file contents:
+# E.g. using `cat -vE $MUTS/GENIE-NKI-*.vcf | less -S`, `grep -Tn "" $MUTS/GENIE-NKI-*.vcf | less -S`, etc.
+# - Chrom names use the chr-prefix, which vcf2maf can handle when used with --remap-chain.
+# - All variants are likely hg19. Some VCFs say hg19 in header, others say nothing.
+# - No mutations in chroms X, Y, or MT are reported, so loci are identical to GRCh37 build.
+# - All lines contain EOLs with carriage return (\r), which might mess with some VCF parsers.
+# - Genie sample IDs are in genotype column names, and only 1 such column per VCF, which is good.
+# - AD lists REF,ALT counts. And VF and AF are the same thing, for variant allele fraction (VAF).
+# - GT is undefined for many variants. So vcf2maf will infer genotype based on VAF.
+grep -v ^# $MUTS/GENIE-NKI-*.vcf | cut -f10 | cut -f1 -d: | sort | uniq -c
+# - GT is also set to 1/1 (homozygosity by LOH) for many more site than seems possible.
+# - Depth (DP) is unfortunately under INFO, rather than FORMAT. Will need ad-hoc code to extract.
+# - Many variants have a non-PASS value under FILTER, which we'll need to ask them about.
+
+# Princess Margaret Cancer Centre - University Health Network (GENIE-UHN-*.vcf)
+
+# ::NOTE:: From manual review of file contents:
+# - Chrom names use the chr-prefix, which vcf2maf can handle when used with --remap-chain.
+# - Many VCFs have no variants, likely to indicate sequenced cases with no reportable mutations.
+# - All variants are likely hg19. Some VCFs say hg19 in header, others say nothing (empty VCFs).
+# - No mutations in chroms X, Y, or MT are reported, so loci are identical to GRCh37 build.
+# - Properly formatted genotype columns are available for both sample and control.
+# - GT appears correctly set to 1/1 for a small handful of somatic sites with LOH.
+grep -v ^# $MUTS/GENIE-UHN-*.vcf | cut -f10 | cut -f1 -d: | sort | uniq -c
+# - Header line for AD says "Number=1" instead of "Number=2" or "Number=R", which breaks parsers.
+
+# MD Anderson Cancer Center (GENIE-MDA-*.vcf)
+
+# ::NOTE:: From manual review of file contents:
+# - Chrom names don't use chr-prefixes, but all VCFs say hg19 in header.
+# - No mutations in chroms X, Y, or MT are reported, so loci are identical to GRCh37 build.
+# - All lines contain EOLs with carriage return (\r), which might mess with some VCF parsers.
+# - Non-Genie sample IDs used in genotype column names. Likely needs de-identification.
+# - Uses Ion Torrent VCF FORMAT with REF/ALT counts in RO/AO. vcf2maf knows how to handle this.
+# - Undefined ID/QUAL fields are empty instead of ".", which can break some parsers.
+# - GT is 0/1 for all reported variants, which is impossible. So it's likely hardcoded.
+grep -v ^# $MUTS/GENIE-MDA-*.vcf | cut -f10 | cut -f1 -d: | sort | uniq -c
+# - The HGVS field under INFO has whitespace, which will definitely break some parsers like VEP.
+
+# Vanderbilt-Ingram Cancer Center (GENIE-VICC-*.vcf)
+
+# ::NOTE:: From manual review of file contents:
+# - Chrom names use the chr-prefix, which vcf2maf can handle when used with --remap-chain.
+# - All VCFs say hg19 in header, but 2 different FASTAs were in use. Should be same genome build.
+# - No mutations in MT (aka chrM) are reported, so loci are identical to GRCh37 build.
+# - Header defines a FILTER called AllPass, but they correctly use "PASS" for all variants.
+# - No genotype columns. But allele counts appear to be in INFO fields under non-standard tags.
+# - ALT counts are in INFO tag FAD, but FAD is missing for 1168/30955 calls across 81/423 samples.
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FAD | wc -l
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FAD | cut -f1 -d: | sort -u | wc -l
+# - REF counts are in INFO tag FRD, but FRD is missing for 626/30955 calls across 80/423 samples.
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FRD | wc -l
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FRD | cut -f1 -d: | sort -u | wc -l
+# - Depth (DP) is in INFO tag FDP, but FDP is missing for 862/30955 calls across 81/423 samples.
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FDP | wc -l
+grep -v ^# $MUTS/GENIE-VICC-*.vcf | cut -f1,8 | grep -wv FDP | cut -f1 -d: | sort -u | wc -l
+# - Some calls list DP, but do *not* use this. It's much higher than FDP for calls with both tags.

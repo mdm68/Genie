@@ -1,4 +1,10 @@
-# Goal: Grab latest MAFs from Firehose, reannotatate in the same way as Genie, and do some comparisons
+# GOAL: Grab latest MAFs from Firehose, re-annotate the same way as Genie, and do some comparisons
+
+## ---------------------------------- ##
+## Download and re-annotate TCGA MAFs ##
+## ---------------------------------- ##
+
+::NOTE:: You can skip this section if you just want to proceed with the re-annotated MAFs
 
 # Fetch the firehose_get tool:
 wget -P bin http://gdac.broadinstitute.org/runs/code/firehose_get_latest.zip
@@ -8,7 +14,7 @@ unzip bin/firehose_get_latest.zip -d bin
 bsub -oo bin/firehose_get.log -R "select[internet && mem=8]" -We 00:59 ./bin/firehose_get -b -only Mutation_Packager_Oncotated_Raw_Calls data 2016_07_15
 
 # That creates a folder structure with tarballs in separate tumor-type subfolders.
-# Find the tumor types with empty subfolders, and download the Mutation_Packager_Oncotated_Calls for those:
+# Find tumor types with empty subfolders, and download Mutation_Packager_Oncotated_Calls for those:
 find stddata__* -type d -empty | cut -f2 -d/ | xargs ./bin/firehose_get -b -only Mutation_Packager_Oncotated_Calls data 2016_07_15
 
 # Unpack all the tarballs, and rename the resulting subfolders to just the tumor type codes:
@@ -16,8 +22,11 @@ mkdir mafs
 cat stddata__*/*/*/*Level_3*.tar.gz | tar -izxf - -C mafs
 ls -d mafs/* | perl -ne 'chomp; ($t)=m/gdac.broadinstitute.org_(\w+)/; print "mv $_ mafs/$t\n"' | bash
 
-# Let's delete the COAD and READ MAFs because they're already accounted for under COADREAD:
+# Let's toss the COAD and READ MAFs because they're already accounted for under COADREAD:
 rm -rf mafs/{COAD,READ}
+
+# Also toss the combined cohorts for GBM+LGG, Pan-Kidney, Pan-GI. We'd rather have them separate:
+rm -rf mafs/{GBMLGG,KIPAN,PANGI}
 
 # For each per-sample MAF, we'll run maf2maf v1.6.10 with the following tweaks:
 # - Use arguments vep-path and vep-cache to point to /opt/common/CentOS_6-dev/vep/v86
@@ -29,3 +38,18 @@ rm -rf mafs/{COAD,READ}
 ls mafs/*/*.maf.txt | perl -ne 'chomp; ($s)=m/^(.*TCGA-\w\w-\w{4}-\d\d)/; print "bsub -oo $s.vep.log -We 00:59 /opt/common/CentOS_6-dev/perl/perl-5.22.0/bin/perl /opt/common/CentOS_6-dev/vcf2maf/v1.6.10/maf2maf.pl --input-maf $_ --output-maf $s.vep.maf --custom-enst /opt/common/CentOS_6-dev/vcf2maf/v1.6.10/data/isoform_overrides_uniprot --vep-path /opt/common/CentOS_6-dev/vep/v86 --vep-data /opt/common/CentOS_6-dev/vep/v86 --ref-fasta /opt/common/CentOS_6-dev/vep/v86/homo_sapiens/86_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz --retain-cols Center,Verification_Status,Validation_Status,Mutation_Status,Sequencing_Phase,Sequence_Source,Validation_Method,Score,BAM_file,Sequencer,Tumor_Sample_UUID,Matched_Norm_Sample_UUID,ref_context,i_dbNSFP_MutationAssessor_pred,i_dbNSFP_MutationAssessor_rankscore,i_dbNSFP_MutationAssessor_score,i_dbNSFP_MutationTaster_converted_rankscore,i_dbNSFP_MutationTaster_pred,i_dbNSFP_MutationTaster_score\n" unless(-s "$s.vep.maf")' | bash
 
 # Concatenate MAFs of the same tumor type, to create per-tumor MAF:
+ls -d mafs/* | perl -ne 'chomp; ($t)=m/(\w+)$/; $tl=lc($t); $mf="mafs/tcga_$tl\_071516.vep.maf"; print "grep -h ^Hugo $_/*.vep.maf | head -n1 > $mf\ngrep -hEv \"^#|^Hugo\" $_/*.vep.maf >> $mf\n"' | bash
+
+# Tarball it and upload to Synapse, under an ID we had already created earlier:
+tar -zcf tcga_firehose_vep_mafs_071516.tar.gz mafs/*.vep.maf readme
+synapse add --id syn7421111 --name "TCGA Firehose MAFs re-annotated with maf2maf" tcga_firehose_vep_mafs_071516.tar.gz
+
+## ------------------ ##
+## TCGA vs Genie MAFs ##
+## ------------------ ##
+
+# Download and unpack the tarball prepared above, unless you already did all that stuff above:
+synapse get syn7421111
+tar -zxf tcga_firehose_vep_mafs_071516.tar.gz
+
+# Brendan Rearden will do the rest, which will be documented in a Jupyter Notebook
