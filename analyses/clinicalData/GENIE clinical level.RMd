@@ -1,0 +1,236 @@
+---
+title: "Site Clinical Characteristics"
+author: "Alex Baras"
+date: "November 26, 2016"
+output: html_document
+---
+
+
+```{r, echo=FALSE}
+
+# libraries
+library(synapseClient)
+library(knitr)
+library(lattice)
+
+# login to SAGE
+#synapseLogin(username="",password="") # you could do this with prompt or coded, but will need to enter something here
+
+# get clinical data file from SAGE
+genieClinData = read.delim(synGet("syn7392892")@filePath)
+
+```
+
+# Race
+
+### Counts - note that some entries are still being submitted as "" and not mapped to Unknown
+
+```{r, echo=FALSE}
+
+# Center vs Race TABLE
+t = as.data.frame.matrix(table(genieClinData$CENTER,genieClinData$PRIMARY_RACE))
+t = data.frame(n=rowSums(t),t)
+colnames(t)[2] = "submitted as empty"
+kable(t)
+
+```
+
+### Percent unknown ("" is mapped to Unknown for this analysis)
+
+```{r, echo=FALSE}
+
+t[,"Unknown"] = t[,"Unknown"]+t[,2]
+t = t[,-2]
+kable(data.frame("Percent.Unknown"=(t[,"Unknown"]/rowSums(t[,colnames(t)!="n"]))*100),digits=2)
+
+```
+
+### breakdown for sites with greater than 100 patients with none "Unknown" data
+
+```{r, echo=FALSE}
+
+t$n = t$n-t$Unknown
+t = t[,!(colnames(t)=="Unknown")]
+k = which(t$n>100)
+t = t[,c(1,6,3,2,4,5)]
+t[k,colnames(t)!="n"] = t[k,colnames(t)!="n"]/rowSums(t[k,colnames(t)!="n"])
+kable(t[k,],digits=3)
+
+```
+
+### Race barplots
+
+```{r, echo=FALSE}
+
+# Center vs Race BARCHARTS
+t$Center = rownames(t)
+l = colnames(t)[2:6]
+t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
+colnames(t)[colnames(t)=="time"] = "Race"
+t$Race = factor(t$Race,l)
+barchart( t$Race ~ t$Percentage | t$Center,xlim=c(0,1))
+
+```
+
+# Ethnicity
+
+### raw counts - note that some entries are still being submitted as "" and not mapped to Unknown
+
+```{r, echo=FALSE}
+
+# Center vs Ethnicity TABLE
+t = as.data.frame.matrix(table(genieClinData$CENTER,genieClinData$ETHNICITY))
+t = data.frame(n=rowSums(t),t)
+colnames(t)[2] = "submitted as empty"
+kable(t)
+
+```
+
+### Percent unknown ("" is mapped to Unknown for this analysis)
+
+```{r, echo=FALSE}
+
+t[,"Unknown"] = t[,"Unknown"]+t[,2]
+t = t[,-2]
+kable(data.frame("Percent.Unknown"=(t[,"Unknown"]/rowSums(t[,colnames(t)!="n"]))*100),digits=2)
+
+```
+
+### breakdown for sites with greater than 100 patients with none "Unknown" data
+
+```{r, echo=FALSE}
+
+t$n = t$n-t$Unknown
+t = t[,!(colnames(t)=="Unknown")]
+k = which(t$n>100)
+t[k,colnames(t)!="n"] = t[k,colnames(t)!="n"]/rowSums(t[k,colnames(t)!="n"])
+kable(t[k,],digits=3)
+
+```
+
+### Ethnicity barplots
+
+```{r, echo=FALSE}
+
+# Center vs Ethnicity BARCHARTS
+t$Center = rownames(t)
+l = colnames(t)[2:3]
+t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
+colnames(t)[colnames(t)=="time"] = "Ethnicity"
+t$Ethnicity = factor(t$Ethnicity,l)
+barchart( t$Ethnicity ~ t$Percentage | t$Center,xlim=c(0,1))
+
+```
+
+# Sex
+
+### raw counts
+
+```{r, echo=FALSE}
+
+# Center vs Sex TABLE
+t = as.data.frame.matrix(table(genieClinData$CENTER,genieClinData$SEX))
+t = data.frame(n=rowSums(t),t)
+kable(t)
+
+```
+
+### sex breakdown across sites
+
+```{r, echo=FALSE}
+
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t,digits=3)
+
+```
+
+### sex barplots
+
+```{r, echo=FALSE}
+
+# Center vs Sex BARCHARTS
+t$Center = rownames(t)
+l = colnames(t)[2:3]
+t = reshape(t,direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
+colnames(t)[colnames(t)=="time"] = "Sex"
+t$Sex = factor(t$Sex,l)
+barchart( t$Sex ~ t$Percentage | t$Center,xlim=c(0,1))
+
+```
+
+# Age
+
+### histograms for age across sites
+
+```{r, echo=FALSE}
+
+# Center vs Sex histograms
+
+genieClinData$age_days = as.numeric(levels(genieClinData$AGE_AT_SEQ_REPORT))[genieClinData$AGE_AT_SEQ_REPORT]
+k = grep("^>",genieClinData$AGE_AT_SEQ_REPORT) # these are the >=90 group that get mapped to 90
+genieClinData$age_days[k] = 90*365
+k = grep("^<",genieClinData$AGE_AT_SEQ_REPORT) # these are the <=18 group that get mapped to 18
+genieClinData$age_days[k] = 18*365
+
+```
+
+### site breakdown for age at seq reporting not submitted ("" is reason for NA introduced)
+
+```{r, echo=FALSE}
+
+k = is.na(genieClinData$age_days)
+t = as.data.frame.matrix(table(genieClinData$CENTER,k))
+kable(data.frame("Percent.Unknown"=(t[,"TRUE"]/rowSums(t))*100),digits=2)
+
+```
+
+### site histograms for age at seq reporting histograms
+
+anything starting with ">" is mapped to to 90-108 (18 year bin)
+
+(it looks like SAGE has already age redacted the >=90y bin across site)
+
+
+```{r, echo=FALSE}
+
+k = !is.na(genieClinData$age_days)
+histogram(~(genieClinData$age_days[k]/365)|genieClinData$CENTER[k],type="density",breaks=c(0,seq(1,89,2),90,108),right=FALSE)
+
+```
+
+### site breakdown for age at seq reported at as days <18y (numeric value)
+
+(there are none for >90, since it looks like SAGE is arleady taking care of those)
+
+
+```{r, echo=FALSE}
+
+k = genieClinData$age_days
+k[!is.na(genieClinData$age_days)] = "(18y,90y)"
+k[is.na(genieClinData$age_days)] = NA
+k[genieClinData$age_days<(18*365)] = "<18y"
+k[genieClinData$age_days>(90*365)] = ">90y"
+t = as.data.frame.matrix(table(genieClinData$CENTER,k))
+t$n = rowSums(t)
+t = t[,-2]
+kable(t)
+
+```
+
+### site breakdown for age at seq reporting histograms
+
+anything starting with ">" is mapped to to 90-108 (18 year bin)
+
+anything starting with "<" is mapped to to 0-18 (18 year bin)
+
+anything with numerical days < 18y is mapped to to 0-18 (18 year bin)
+
+Note: histograms as being presented as density now that bins are not equal size
+
+```{r, echo=FALSE}
+
+genieClinData$age_days[genieClinData$age_days<(18*365)] = 18*365
+k = !is.na(genieClinData$age_days)
+histogram(~(genieClinData$age_days[k]/365)|genieClinData$CENTER[k],type="density",breaks=c(0,seq(19,89,2),90,108),right=FALSE)
+
+```
