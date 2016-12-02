@@ -47,14 +47,10 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
 
     :returns:                              Error message
     """
-    #Make everything uppercase
-    correct_column_headers = ['ONCOTREE_CODE', 'SAMPLE_TYPE', 'SEQ_ASSAY_ID', 'SAMPLE_ID',
-                       'AGE_AT_SEQ_REPORT', 'PATIENT_ID', 'TERTIARY_RACE', 'PRIMARY_RACE','PATIENT_BIRTH_YEAR',
-                       'SEX', 'SECONDARY_RACE', 'ETHNICITY', 'BIRTH_YEAR',"GENIE_PATIENT_ID","NAACCR_SEX_CODE","NAACCR_RACE_CODE_PRIMARY",
-                       'NAACCR_RACE_CODE_SECONDARY','NAACCR_RACE_CODE_TERTIARY','NAACCR_ETHNICITY_CODE','GENIE_SAMPLE_ID']
 
     message="Below are some of the issues with your files:\n"
     clinicalDF = pd.read_csv(clinicalFilePath,sep="\t",comment="#")
+    clinicalDF.columns = [col.upper() for col in clinicalDF.columns]
     clinicalDF = clinicalDF.fillna("")
     total_error = ""
     warning = ""
@@ -63,6 +59,16 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     else:
         clinicalSampleDF = pd.read_csv(clinicalSamplePath,sep="\t",comment="#")
         clinicalSampleDF = clinicalSampleDF.fillna("")
+        clinicalSampleDF
+
+    #CHECK: SAMPLE_ID
+    if clinicalSampleDF.get("SAMPLE_ID") is not None:
+        sampleId = 'SAMPLE_ID'
+    else:
+        sampleId = 'GENIE_SAMPLE_ID'
+    error = checkColExist(clinicalSampleDF, sampleId)
+    if error != "":
+        total_error = total_error + "Sample: clinical file must have SAMPLE_ID column.\n"
 
     #CHECK: AGE_AT_SEQ_REPORT
     if clinicalSampleDF.get("AGE_AT_SEQ_REPORT") is not None:
@@ -103,14 +109,6 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     else:
         total_error = total_error + "Sample: clinical file must have SEQ_ASSAY_ID column.\n"
 
-    #CHECK: SAMPLE_ID
-    if clinicalSampleDF.get("SAMPLE_ID") is not None:
-        sampleId = 'SAMPLE_ID'
-    else:
-        sampleId = 'GENIE_SAMPLE_ID'
-    error = checkColExist(clinicalSampleDF, sampleId)
-    if error != "":
-        total_error = total_error + "Sample: clinical file must have SAMPLE_ID column.\n"
 
     #CHECK: BIRTH_YEAR
     if clinicalDF.get("BIRTH_YEAR") is not None:
