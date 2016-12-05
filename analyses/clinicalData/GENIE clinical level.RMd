@@ -1,7 +1,7 @@
 ---
-title: "Site Clinical Characteristics"
+title: "Clinical Data Site Characteristics"
 author: "Alex Baras"
-date: "November 26, 2016"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -10,11 +10,13 @@ output: html_document
 
 # libraries
 library(synapseClient)
+library(RCurl)
 library(knitr)
 library(lattice)
 
+
 # login to SAGE
-#synapseLogin(username="",password="") # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username="baras@jhmi.edu",password="AjQ8j8r?") # you could do this with prompt or coded, but will need to enter something here
 
 # get clinical data file from SAGE
 genieClinData = read.delim(synGet("syn7392892")@filePath)
@@ -23,36 +25,35 @@ genieClinData = read.delim(synGet("syn7392892")@filePath)
 
 # Race
 
-### Counts - note that some entries are still being submitted as "" and not mapped to Unknown
+### Counts
 
 ```{r, echo=FALSE}
 
 # Center vs Race TABLE
 t = as.data.frame.matrix(table(genieClinData$CENTER,genieClinData$PRIMARY_RACE))
 t = data.frame(n=rowSums(t),t)
-colnames(t)[2] = "submitted as empty"
 kable(t)
 
 ```
 
-### Percent unknown ("" is mapped to Unknown for this analysis)
+### Percent unknown
 
 ```{r, echo=FALSE}
 
-t[,"Unknown"] = t[,"Unknown"]+t[,2]
-t = t[,-2]
 kable(data.frame("Percent.Unknown"=(t[,"Unknown"]/rowSums(t[,colnames(t)!="n"]))*100),digits=2)
 
 ```
 
-### breakdown for sites with greater than 100 patients with none "Unknown" data
+### Breakdown for sites with greater than 100 patients with none "Unknown" data
 
 ```{r, echo=FALSE}
 
+# reduce table to none "Unknown" data
 t$n = t$n-t$Unknown
 t = t[,!(colnames(t)=="Unknown")]
+# find sites with greater than 100 nono "Unknown" patients wrt race
 k = which(t$n>100)
-t = t[,c(1,6,3,2,4,5)]
+t = t[,c("n","White","Black","Asian","Native.American","Other")]
 t[k,colnames(t)!="n"] = t[k,colnames(t)!="n"]/rowSums(t[k,colnames(t)!="n"])
 kable(t[k,],digits=3)
 
@@ -64,7 +65,7 @@ kable(t[k,],digits=3)
 
 # Center vs Race BARCHARTS
 t$Center = rownames(t)
-l = colnames(t)[2:6]
+l = c("White","Black","Asian","Native.American","Other")
 t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Race"
 t$Race = factor(t$Race,l)
@@ -74,24 +75,21 @@ barchart( t$Race ~ t$Percentage | t$Center,xlim=c(0,1))
 
 # Ethnicity
 
-### raw counts - note that some entries are still being submitted as "" and not mapped to Unknown
+### Counts
 
 ```{r, echo=FALSE}
 
 # Center vs Ethnicity TABLE
 t = as.data.frame.matrix(table(genieClinData$CENTER,genieClinData$ETHNICITY))
 t = data.frame(n=rowSums(t),t)
-colnames(t)[2] = "submitted as empty"
 kable(t)
 
 ```
 
-### Percent unknown ("" is mapped to Unknown for this analysis)
+### Percent unknown
 
 ```{r, echo=FALSE}
 
-t[,"Unknown"] = t[,"Unknown"]+t[,2]
-t = t[,-2]
 kable(data.frame("Percent.Unknown"=(t[,"Unknown"]/rowSums(t[,colnames(t)!="n"]))*100),digits=2)
 
 ```
@@ -114,7 +112,7 @@ kable(t[k,],digits=3)
 
 # Center vs Ethnicity BARCHARTS
 t$Center = rownames(t)
-l = colnames(t)[2:3]
+l = c("Non.Spanish.non.Hispanic","Spanish.Hispanic")
 t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Ethnicity"
 t$Ethnicity = factor(t$Ethnicity,l)
@@ -150,7 +148,7 @@ kable(t,digits=3)
 
 # Center vs Sex BARCHARTS
 t$Center = rownames(t)
-l = colnames(t)[2:3]
+l = c("Female","Male")
 t = reshape(t,direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Sex"
 t$Sex = factor(t$Sex,l)
@@ -232,5 +230,14 @@ Note: histograms as being presented as density now that bins are not equal size
 genieClinData$age_days[genieClinData$age_days<(18*365)] = 18*365
 k = !is.na(genieClinData$age_days)
 histogram(~(genieClinData$age_days[k]/365)|genieClinData$CENTER[k],type="density",breaks=c(0,seq(19,89,2),90,108),right=FALSE)
+
+```
+
+# Oncotree breakdowns
+
+```{r, echo=FALSE}
+
+t = as.data.frame.matrix(table(genieClinData$CANCER_TYPE,genieClinData$CENTER))
+kable(t)
 
 ```
