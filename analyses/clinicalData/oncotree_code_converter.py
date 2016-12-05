@@ -7,7 +7,7 @@ import re
 
 # globals
 
-PATTERN = re.compile('([A-Za-z ,-/]*) \\(([A-Za-z_]*)\\)')
+PATTERN = re.compile('([A-Za-z\' ,-/]*) \\(([A-Za-z_]*)\\)')
 SPREADSHEET_FIELDS = ['quinternary', 'quaternary', 'tertiary', 'secondary', 'primary']
 MAIN_TYPE_FIELD = 'metamaintype'
 
