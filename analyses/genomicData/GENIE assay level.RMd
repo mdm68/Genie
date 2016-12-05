@@ -14,10 +14,16 @@ library(knitr)
 library(lattice)
 
 # login to SAGE
-synapseLogin(username="baras@jhmi.edu",password="AjQ8j8r?") # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username="",password="") # you could do this with prompt or coded, but will need to enter something here
 
 # read aggregated MAF file
 genieMutData = read.delim(synGet("syn5571527")@filePath,header=TRUE,sep="\t",quote="",comment="",skip = 1)
+
+# records with count data that preclude a VAF estimate - set VAF to 100% (1/1, alt/depth)
+noVAF.idx = which((genieMutData$t_depth==0)|is.na(genieMutData$t_depth))
+genieMutData$t_alt_count_num = as.numeric(levels(genieMutData$t_alt_count))[genieMutData$t_alt_count]
+genieMutData$t_alt_count_num[noVAF.idx] = 1
+genieMutData$t_depth[noVAF.idx] = 1
 
 ```
 
