@@ -267,14 +267,15 @@ def validateVCF(filePath):
     #FORMAT is optional
     total_error = ""
     warning = ""
+    headers = None
     with open(filePath,"r") as foo:
-        temp = csv.reader(foo, delimiter="\t")
-        head = 1
-        while head == 1:
-            headers = temp.next()
-            head = len(headers)
-
-    vcf = pd.read_csv(filePath, sep="\t",comment="#",header=None,names=headers)
+        for i in foo:
+            if i.startswith("#CHROM"):
+                headers = i.replace("\n","").split("\t")
+    if headers is not None:
+        vcf = pd.read_csv(filePath, sep="\t",comment="#",header=None,names=headers)
+    else:
+        raise ValueError("Your vcf must start with the header #CHROM")
     
     if sum(vcf.columns.isin(REQUIRED_HEADERS)) != 8:
         total_error = total_error + "Your vcf file must have these headers: CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO.\n"
