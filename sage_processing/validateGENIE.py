@@ -411,6 +411,7 @@ def perform_main(args):
         message = message + total_error
     if warning != "":
         message = message + "-------------WARNINGS-------------\n" + warning
+        
     print(message)
     return(message)
 
