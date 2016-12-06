@@ -46,6 +46,7 @@ def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False
     """
     This function checks if the column exists then checks if the values in the column have the correct integer values
     
+    :params clinicalDF          Patient/sample/flattened clinical file
     :params primaryName:        Primary expected column name
     :params secondaryName:      Secondary expected column name
     :params mapping:            List of possible values
@@ -98,6 +99,9 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     error = checkColExist(clinicalSampleDF, sampleId)
     if error != "":
         total_error = total_error + "Sample: clinical file must have SAMPLE_ID column.\n"
+    else:
+        if sum(clinicalSampleDF[sampleId].isnull()) > 0:
+            total_error = total_error + "Sample: There can't be any blank values for PATIENT_ID\n"
 
     #CHECK: AGE_AT_SEQ_REPORT
     if clinicalSampleDF.get("AGE_AT_SEQ_REPORT") is not None:
@@ -164,18 +168,20 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     error = checkColExist(clinicalDF, patientId)
     if error != "":
         total_error = total_error + "Patient: clinical file must have PATIENT_ID column.\n"
+    else:
+        if sum(clinicalDF[patientId].isnull()) > 0:
+            total_error = total_error + "Patient: There can't be any blank values for PATIENT_ID\n"
+
 
     # Create patient Id in sample data
     if clinicalSampleDF.get(patientId) is None:
         clinicalSampleDF[patientId] = ["-".join(samp.split("-")[0:3]) for samp in clinicalSampleDF[sampleId]]
-    if clinicalSamplePath is not None:
-        clinicalDF = clinicalDF.merge(clinicalSampleDF, on=patientId,how="outer")
-    #CHECK: All patients must have associated sample data 
-    if not all(clinicalSampleDF[patientId].isin(clinicalDF[patientId])):
-        total_error = total_error + "Sample: All patients must have associated sample information\n"
     #CHECK: All samples must have associated patient data 
-    if sum(clinicalDF[patientId].isnull()) >0:
-        total_error = total_error + "Patient: All samples must have associated patient information\n"
+    if not all(clinicalSampleDF[patientId].isin(clinicalDF[patientId])):
+        total_error = total_error + "Sample: All samples must have associated patient information\n"
+    #CHECK: All patients must have associated sample data 
+    if not all(clinicalDF[patientId].isin(clinicalSampleDF[patientId])):
+        total_error = total_error + "Sample: All patients must have associated sample information\n"
 
     #CHECK: PRIMARY_RACE
     warn, error = checkMapping(clinicalDF,"PRIMARY_RACE","NAACCR_RACE_CODE_PRIMARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
