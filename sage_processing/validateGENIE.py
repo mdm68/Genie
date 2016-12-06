@@ -67,7 +67,7 @@ def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False
             warning = "%s: clinical file doesn't have %s column. A blank column will be added\n" % (fileType,primaryName)
     else:
         if not all([i in mapping for i in clinicalDF[race]]):
-            error = "%s: Please double check your %s column.  This column must be these values %s and blank.\n" % (fileType, primaryName,", ".join(map(str,mapping)))
+            error = "%s: Please double check your %s column.  This column must be these values %sand blank.\n" % (fileType, primaryName,", ".join(map(str,mapping)))
     return(warning, error)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
@@ -171,7 +171,6 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     else:
         if sum(clinicalDF[patientId].isnull()) > 0:
             total_error = total_error + "Patient: There can't be any blank values for PATIENT_ID\n"
-
 
     # Create patient Id in sample data
     if clinicalSampleDF.get(patientId) is None:
