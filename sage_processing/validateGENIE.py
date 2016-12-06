@@ -76,7 +76,6 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
 
     :returns:                              Error message
     """
-
     clinicalDF = pd.read_csv(clinicalFilePath,sep="\t",comment="#")
     clinicalDF.columns = [col.upper() for col in clinicalDF.columns]
     clinicalDF = clinicalDF.fillna("")
@@ -310,12 +309,14 @@ def validateCNV(filePath):
     message="Below are some of the issues with your files:\n"
     warning = ""
     cnvDF = pd.read_csv(filePath,sep="\t",comment="#")
-    if cnvDF.columns[0] != "Hugo_Symbol":
-        total_error = total_error + "Your cnv file's first column must be Hugo_Symbol (Case sensitive)\n"
+    cnvDF.columns = [col.upper() for col in cnvDF.columns]
+
+    if cnvDF.columns[0] != "HUGO_SYMBOL":
+        total_error = total_error + "Your cnv file's first column must be Hugo_Symbol\n"
     
     cnvDF.drop(cnvDF.columns[[0]], axis=1, inplace=True)
-    if cnvDF.get("Entrez_Gene_Id") is not None:
-        del cnvDF['Entrez_Gene_Id']
+    if cnvDF.get("ENTREZ_GENE_ID") is not None:
+        del cnvDF['ENTREZ_GENE_ID']
 
     if not all(~cnvDF.isnull()):
         total_error = total_error + "Your cnv file must not have any empty values\n"
@@ -337,11 +338,12 @@ def validateFusion(filePath):
     warning = ""
 
     fusionDF = pd.read_csv(filePath,sep="\t",comment="#")
+    fusionDF.columns = [col.upper() for col in fusionDF.columns]
 
-    REQUIRED_HEADERS = ['Hugo_Symbol','Entrez_Gene_Id','Center','Tumor_Sample_Barcode','Fusion','DNA_support','RNA_support','Method','Frame']
+    REQUIRED_HEADERS = ['HUGO_SYMBOL','ENTREZ_GENE_ID','CENTER','TUMOR_SAMPLE_BARCODE','FUSION','DNA_SUPPORT','RNA_SUPPORT','METHOD','FRAME']
 
-    if not all(fusionDF.columns.isin(REQUIRED_HEADERS)):
-        total_error = total_error + "Your fusion file must at least have these headers (Case sensitive): %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
+    if not all([i in fusionDF.columns for i in REQUIRED_HEADERS]):
+        total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
     
     return(total_error, warning)
 
@@ -411,7 +413,7 @@ def perform_main(args):
         message = message + total_error
     if warning != "":
         message = message + "-------------WARNINGS-------------\n" + warning
-        
+
     print(message)
     return(message)
 
