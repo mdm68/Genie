@@ -5,6 +5,7 @@ import synapseclient
 import os
 #import subprocess
 import argparse
+import csv
 import getpass
 import string
 import numpy as np
@@ -264,7 +265,6 @@ def validateVCF(filePath):
     total_error = ""
     warning = ""
     with open(filePath,"r") as foo:
-        import csv
         temp = csv.reader(foo, delimiter="\t")
         head = 1
         while head == 1:
@@ -368,13 +368,29 @@ def validateSEG(filePath):
 
     return(total_error, warning)
 
+def validateFileName(args):
+    VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
+                         'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
+                         'vcf':"GENIE-%s",
+                         'cnv':"data_CNA_%s.txt",
+                         'fusion':"data_fusions_%s.txt",
+                         'seg':"genie_data_cna_hg19_%s.seg"}
 
-VALIDATE_MAPPING = {'maf':validateMAF,
-                    'clinical':validateClinical,
-                    'vcf':validateVCF,
-                    'cnv':validateCNV,
-                    'fusion':validateFusion,
-                    'seg':validateSEG}
+
+    if args.fileType == "clinical":
+        formatting = [i % args.center for i in VALIDATE_FILENAME[args.fileType]]
+        if len(args.file) > 1:
+            assert len(set(args.file)) > 1, "Must submit be two different files"
+            assert sum([i in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s" % ", ".join(formatting[1:3]) 
+        else:
+            assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s" % formatting[0]
+    else:
+        formatting = VALIDATE_FILENAME[args.fileType] % args.center
+
+        if args.fileType == "vcf":
+            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId" % args.center 
+        else:
+            assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s" % (args.fileType, formatting)
 
 def perform_main(args):
     """
@@ -382,12 +398,22 @@ def perform_main(args):
 
     :returns:   Text with the errors of the chosen file
     """
+
+    VALIDATE_MAPPING = {'maf':validateMAF,
+                'clinical':validateClinical,
+                'vcf':validateVCF,
+                'cnv':validateCNV,
+                'fusion':validateFusion,
+                'seg':validateSEG}
     syn = synapse_login()
+    try:
+        validateFileName(args)
+    except AssertionError as e:
+        print("Your filename is incorrect! %s"  % e)
     validate_func = VALIDATE_MAPPING[args.fileType]
     if args.fileType == "clinical":
         oncotree_mapping_ent = syn.tableQuery('SELECT * FROM syn7437073')
         oncotree_mapping = oncotree_mapping_ent.asDataFrame()
-        
         if len(args.file) > 1:
             for filename in args.file:
                 if not os.path.isfile(filename):
@@ -405,10 +431,11 @@ def perform_main(args):
             total_error, warning = validate_func(args.file[0],oncotree_mapping)
     else:
         total_error, warning = validate_func(args.file[0])
+    
     #Complete error message
     message = "Below are some of the issues with your file:\n"
     if total_error == "":
-        message = "There is nothing wrong with your file!\n"
+        message = "There is nothing wrong with the contents of your file!\n"
     else:
         message = message + total_error
     if warning != "":
@@ -426,6 +453,8 @@ if __name__ == "__main__":
                         help='File type that you are validating: maf, clinical, fusion, cnv, vcf, seg')
     parser.add_argument("file", type=str, nargs="+",
                         help='File(s) that you are validating.  If you validation your clinical files and you have both sample and patient files, you must provide both')
-
+    parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHH','MDA','VICC','UHN'],
+                        help='Contributing Center')
     args = parser.parse_args()
+
     perform_main(args)
