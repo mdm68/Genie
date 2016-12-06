@@ -8,8 +8,9 @@ import argparse
 import csv
 import getpass
 import string
-import numpy as np
 
+#DEPENDENCIES
+#PANDAS
 def synapse_login():
     """
     This function logs into synapse for you if credentials are saved.  
@@ -86,6 +87,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
         clinicalSampleDF = clinicalDF.copy()
     else:
         clinicalSampleDF = pd.read_csv(clinicalSamplePath,sep="\t",comment="#")
+        clinicalSampleDF.columns = [col.upper() for col in clinicalSampleDF.columns]
         clinicalSampleDF = clinicalSampleDF.fillna("")
     
     #CHECK: SAMPLE_ID
@@ -108,7 +110,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
         #First for loop can't int(text) because there are instances that have <3435 
         clinicalSampleDF[age] = [text.replace(">","") if isinstance(text, str) else text for text in clinicalSampleDF[age]]
         clinicalSampleDF[age] = [int(text.replace("<","")) if isinstance(text, str) and text != "" else text for text in clinicalSampleDF[age]]
-        if not all([isinstance(i, (int,float)) or i == "" for i in clinicalSampleDF[age]]) or np.median(clinicalSampleDF[age]) < 100:
+        if not all([isinstance(i, (int,float)) or i == "" for i in clinicalSampleDF[age]]) or pd.np.median(clinicalSampleDF[age]) < 100:
             total_error = total_error + "Sample: Please double check your AGE_AT_SEQ_REPORT.  This is the interval in DAYS (integer) between the patient's date of birth and the date of the sequencing report that is associated with the sample.\n"
     else:
         total_error = total_error + "Sample: clinical file must have AGE_AT_SEQ_REPORT column.\n"
@@ -258,6 +260,7 @@ def validateVCF(filePath):
 
     :returns:             Text with all the errors in the VCF file
     """
+
     message="Below are some of the issues with your files:\n"
     
     REQUIRED_HEADERS = ["#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO"]
