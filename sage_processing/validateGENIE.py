@@ -389,8 +389,8 @@ def validateFileName(args):
     if args.fileType == "clinical":
         formatting = [i % args.center for i in VALIDATE_FILENAME[args.fileType]]
         if len(args.file) > 1:
-            assert len(set(args.file)) > 1, "Must submit be two different files"
-            assert sum([i in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s" % ", ".join(formatting[1:3]) 
+            assert len(set(args.file)) > 1, "Must submit two different filenames"
+            assert sum([os.path.basename(i) in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s" % ", ".join(formatting[1:3]) 
         else:
             assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s" % formatting[0]
     else:
