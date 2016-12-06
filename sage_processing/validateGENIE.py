@@ -21,7 +21,7 @@ def synapse_login():
         Username = raw_input("Username: ")
         Password = getpass.getpass()
         syn = synapseclient.login(email=Username, password=Password,rememberMe=True)
-    return syn
+    return(syn)
 
 #VALIDATING CLINICAL
 def checkColExist(clinicalDF, key):
@@ -77,7 +77,6 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     :returns:                              Error message
     """
 
-    message="Below are some of the issues with your files:\n"
     clinicalDF = pd.read_csv(clinicalFilePath,sep="\t",comment="#")
     clinicalDF.columns = [col.upper() for col in clinicalDF.columns]
     clinicalDF = clinicalDF.fillna("")
@@ -199,16 +198,9 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     #CHECK: ETHNICITY
     warn, error = checkMapping(clinicalDF,"ETHNICITY","NAACCR_ETHNICITY_CODE",[0,1,2,3,4,5,6,7,8,9,""])
     warning = warning + warn
-    total_error  = total_error + error 
+    total_error  = total_error + error
 
-    #Complete error message
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
-    if warning != "":
-        message = message + "-------------WARNINGS-------------\n" + warning
-    return(message)
+    return(total_error, warning)
 
 #VALIDATING MAF
 def validateMAF(filePath):
@@ -220,32 +212,35 @@ def validateMAF(filePath):
     :returns:             Text with all the errors in the clinical file
     """
 
-
-    first_header = ['Chromosome','Start_Position','Reference_Allele','Tumor_Seq_Allele2','Tumor_Sample_Barcode']
-    correct_column_headers = ['Chromosome','Start_Position','Reference_Allele','Tumor_Seq_Allele2','Tumor_Sample_Barcode','t_alt_count','t_depth']
-    optional_headers = ['t_ref_count','n_depth','n_ref_count','n_alt_count']
+    first_header = ['CHROMOSOME','HUGO_SYMBOL','TUMOR_SAMPLE_BARCODE']
+    correct_column_headers = ['CHROMOSOME','START_POSITION','HUGO_SYMBOL','REFERENCE_ALLELE','TUMOR_SEQ_ALLELE2','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH']
+    optional_headers = ['T_REF_COUNT','N_DEPTH','N_REF_COUNT','N_ALT_COUNT']
     
     mutationDF = pd.read_csv(filePath,sep="\t",comment="#")
+    mutationDF.columns = [col.upper() for col in mutationDF.columns]
 
     total_error = ""
-    message = "Below are some of the issues with your file:\n"
     warning = ""
-
+    
+    #CHECK: First column must be in the first_header list
     if mutationDF.columns[0] not in first_header:
-        total_error = total_error+"First column header must be one of these (Case sensitive): %s.\n" % ", ".join(first_header)
+        total_error = total_error+"First column header must be one of these: %s.\n" % ", ".join(first_header)
+    
+    #CHECK: Everything in correct_column_headers must be in mutation file
+    if not all([i in mutationDF.columns for i in correct_column_headers]):
+        total_error = total_error + "Your mutation file must at least have these headers: %s.\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
+    
+    #CHECK: Mutation file would benefit from columns in optional_headers
+    if not all([i in mutationDF.columns for i in optional_headers]):
+        warning = warning + "Your mutation file does not have the column headers that can give extra information to the processed mutation file: %s.\n" % ", ".join([i for i in optional_headers if i not in mutationDF.columns.values ])      
+    
+    #CHECK: mutation file must not have empty reference or variant alleles
+    if sum(mutationDF['REFERENCE_ALLELE'].isnull()) > 0:
+        total_error = total_error + "Your mutation file cannot have any empty REFERENCE_ALLELE values.\n"
+    if sum(mutationDF['TUMOR_SEQ_ALLELE2'].isnull()) >0:
+        total_error = total_error + "Your mutation file cannot have any empty TUMOR_SEQ_ALLELE2 values.\n"
 
-    if not all(mutationDF.columns.isin(correct_column_headers)):
-        total_error = total_error + "Your mutation file must at least have these headers (Case sensitive): %s.\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
-
-    if not all(mutationDF.columns.isin(optional_headers)):
-        warning = warning + "Your mutation file does not have the column headers that can give extra information to the processed mutation file (Case sensitive): %s.\n" % ", ".join([i for i in optional_headers if i not in mutationDF.columns.values ])      
-
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
-    message = message + warning
-    return(message)
+    return(total_error, warning)
 
 ### VALIDATING VCF
 def contains_whitespace(x):
@@ -255,7 +250,6 @@ def contains_whitespace(x):
     return(sum([" " in i for i in x if isinstance(i, str)]))
 
 # Resolve missing read counts
-
 def validateVCF(filePath):
     """
     This function validates the VCF file to make sure it adhere to the genomic SOP.
@@ -269,6 +263,7 @@ def validateVCF(filePath):
     REQUIRED_HEADERS = ["#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO"]
     #FORMAT is optional
     total_error = ""
+    warning = ""
     with open(filePath,"r") as foo:
         import csv
         temp = csv.reader(foo, delimiter="\t")
@@ -300,12 +295,7 @@ def validateVCF(filePath):
         total_error = total_error + "Your vcf file must not have any white spaces in any of the columns.\n"
     #I can also recommend a `bcftools query` command that will parse a VCF in a detailed way, 
     #and output with warnings or errors if the format is not adhered too
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
-
-    return(message)
+    return(total_error, warning)
 
 #VALIDATING CNV
 def validateCNV(filePath):
@@ -318,7 +308,7 @@ def validateCNV(filePath):
     """
     total_error = ""
     message="Below are some of the issues with your files:\n"
-
+    warning = ""
     cnvDF = pd.read_csv(filePath,sep="\t",comment="#")
     if cnvDF.columns[0] != "Hugo_Symbol":
         total_error = total_error + "Your cnv file's first column must be Hugo_Symbol (Case sensitive)\n"
@@ -333,12 +323,7 @@ def validateCNV(filePath):
     if not all(cnvDF.applymap(lambda x: isinstance(x, float))):
         total_error = total_error + "All values must be numerical values\n"
 
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
-
-    return(message)
+    return(total_error, warning)
 
 def validateFusion(filePath):
     """
@@ -349,7 +334,7 @@ def validateFusion(filePath):
     :returns:             Text with all the errors in the Fusion file
     """
     total_error = ""
-    message="Below are some of the issues with your files:\n"
+    warning = ""
 
     fusionDF = pd.read_csv(filePath,sep="\t",comment="#")
 
@@ -358,12 +343,7 @@ def validateFusion(filePath):
     if not all(fusionDF.columns.isin(REQUIRED_HEADERS)):
         total_error = total_error + "Your fusion file must at least have these headers (Case sensitive): %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
     
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
-
-    return(message)
+    return(total_error, warning)
 
 #Validate SEG files
 def validateSEG(filePath):
@@ -375,7 +355,7 @@ def validateSEG(filePath):
     :returns:             Text with all the errors in the SEG file
     """
     total_error = ""
-    message="Below are some of the issues with your files:\n"
+    warning = ""
 
     segDF = pd.read_csv(filePath,sep="\t",comment="#")
 
@@ -383,13 +363,8 @@ def validateSEG(filePath):
     
     if not all(segDF.columns.isin(REQUIRED_HEADERS)):
         total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
-    
-    if total_error == "":
-        message = "There is nothing wrong with your file!\n"
-    else:
-        message = message + total_error
 
-    return(message)
+    return(total_error, warning)
 
 
 VALIDATE_MAPPING = {'maf':validateMAF,
@@ -419,15 +394,23 @@ def perform_main(args):
                     raise ValueError("You can only specify two files when validating clinical files. 'patient' and 'sample' must exist in either filenames")
 
             if "patient" in args.file[0].lower():
-                message = validate_func(args.file[0],oncotree_mapping,args.file[1])
+                total_error, warning = validate_func(args.file[0],oncotree_mapping,args.file[1])
             else:
-                message = validate_func(args.file[1],oncotree_mapping,args.file[0])
+                total_error, warning = validate_func(args.file[1],oncotree_mapping,args.file[0])
         else:
             if not os.path.isfile(args.file[0]):
                 raise ValueError("File doesn't exist")
-            message = validate_func(args.file[0],oncotree_mapping)
+            total_error, warning = validate_func(args.file[0],oncotree_mapping)
     else:
-        message = validate_func(args.file[0])
+        total_error, warning = validate_func(args.file[0])
+    #Complete error message
+    message = "Below are some of the issues with your file:\n"
+    if total_error == "":
+        message = "There is nothing wrong with your file!\n"
+    else:
+        message = message + total_error
+    if warning != "":
+        message = message + "-------------WARNINGS-------------\n" + warning
     print(message)
     return(message)
 
