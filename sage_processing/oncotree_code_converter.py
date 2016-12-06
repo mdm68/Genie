@@ -14,7 +14,7 @@ MAIN_TYPE_FIELD = 'metamaintype'
 CANCER_TYPE = 'CANCER_TYPE'
 CANCER_TYPE_DETAILED = 'CANCER_TYPE_DETAILED'
 ONCOTREE_CODE = 'ONCOTREE_CODE'
-ROOT_ONCOTREE_CODE = 'ROOT_ONCOTREE_CODE'
+ROOT_ONCOTREE_CODE = 'SECONDARY_ONCOTREE_CODE'
 SAMPLE_ID = 'SAMPLE_ID'
 NA = 'NA'
 
@@ -61,7 +61,7 @@ def get_cancer_types(oncotree, code):
 					except IndexError:
 						cancer_type = NA
 					# Found it, return to not keep processing more lines.
-					return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed, ROOT_ONCOTREE_CODE: re.sub('.+\((.+)\)',"\\1",data[header.index('primary')])}			
+					return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed, ROOT_ONCOTREE_CODE: re.sub('.+\((.+)\)',"\\1",data[header.index('secondary')])}			
 	# Nothing was found, return NAs
 	return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed}
 
