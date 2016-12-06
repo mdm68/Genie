@@ -40,7 +40,7 @@ def checkColExist(clinicalDF, key):
     return(error)
 
 #CHECKS IF THE MAPPING IS CORRECT
-def checkMapping(clinicalDF, primaryName, secondaryName, mapping):
+def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False, fileType = "Patient"):
     """
     This function checks if the column exists then checks if the values in the column have the correct integer values
     
@@ -56,12 +56,15 @@ def checkMapping(clinicalDF, primaryName, secondaryName, mapping):
         race = primaryName
     else:
         race = secondaryName
-    error = checkColExist(clinicalDF, race)
-    if error != "":
-        warning = "Patient: clinical file doesn't have %s column. A blank column will be added\n" % primaryName
+    checkCol = checkColExist(clinicalDF, race)
+    if checkCol != "":
+        if required:
+            error = "%s: clinical file must have %s column.\n" % (fileType,primaryName)
+        else:
+            warning = "%s: clinical file doesn't have %s column. A blank column will be added\n" % (fileType,primaryName)
     else:
         if not all([i in mapping for i in clinicalDF[race]]):
-            error = "Patient: Please double check your %s column.  This column must be integers or blank.\n" % primaryName
+            error = "%s: Please double check your %s column.  This column must be these values %s and blank.\n" % (fileType, primaryName,", ".join(map(str,mapping)))
     return(warning, error)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
@@ -85,6 +88,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     else:
         clinicalSampleDF = pd.read_csv(clinicalSamplePath,sep="\t",comment="#")
         clinicalSampleDF = clinicalSampleDF.fillna("")
+    
     #CHECK: SAMPLE_ID
     if clinicalSampleDF.get("SAMPLE_ID") is not None:
         sampleId = 'SAMPLE_ID'
@@ -102,7 +106,8 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     error = checkColExist(clinicalSampleDF, age)
     if error == "":
         #Deal with HIPAA converted rows from DFCI
-        clinicalSampleDF[age] = [int(text.replace(">","")) if isinstance(text, str) else text for text in clinicalSampleDF[age]]
+        #First for loop can't int(text) because there are instances that have <3435 
+        clinicalSampleDF[age] = [text.replace(">","") if isinstance(text, str) else text for text in clinicalSampleDF[age]]
         clinicalSampleDF[age] = [int(text.replace("<","")) if isinstance(text, str) and text != "" else text for text in clinicalSampleDF[age]]
         if not all([isinstance(i, (int,float)) or i == "" for i in clinicalSampleDF[age]]) or np.median(clinicalSampleDF[age]) < 100:
             total_error = total_error + "Sample: Please double check your AGE_AT_SEQ_REPORT.  This is the interval in DAYS (integer) between the patient's date of birth and the date of the sequencing report that is associated with the sample.\n"
@@ -117,7 +122,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
             total_error = total_error + "Sample: Please double check that all your ONCOTREE CODES exist in the mapping. You have %d samples that don't map. These are the codes that don't map: %s\n" % (len(unmapped_oncotrees),",".join(set(unmapped_oncotrees)))
     else:
         total_error = total_error + "Sample: clinical file must have ONCOTREE_CODE column.\n"
-
+    
     #CHECK: SAMPLE_TYPE
     error = checkColExist(clinicalSampleDF, "SAMPLE_TYPE")
     if error == "":
@@ -130,10 +135,9 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     error = checkColExist(clinicalSampleDF, "SEQ_ASSAY_ID")
     if error == "":
         if not all([i != "" for i in clinicalSampleDF['SEQ_ASSAY_ID']]):
-            warning = warning + "Sample: (Warning) Please double check your SEQ_ASSAY_ID columns, there are empty rows.\n"
+            warning = warning + "Sample: Please double check your SEQ_ASSAY_ID columns, there are empty rows.\n"
     else:
         total_error = total_error + "Sample: clinical file must have SEQ_ASSAY_ID column.\n"
-
 
     #CHECK: BIRTH_YEAR
     if clinicalDF.get("BIRTH_YEAR") is not None:
@@ -143,7 +147,8 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     error = checkColExist(clinicalDF, birth_year)
     if error == "": 
         #Deal with HIPAA converted rows from DFCI
-        clinicalDF[birth_year] = [int(text.replace(">","")) if isinstance(text, str) else text for text in clinicalDF[birth_year]]
+        #First for loop can't int(text) because there are instances that have <3435 
+        clinicalDF[birth_year] = [text.replace(">","") if isinstance(text, str) else text for text in clinicalDF[birth_year]]
         clinicalDF[birth_year] = [int(text.replace("<","")) if isinstance(text, str) and text != "" else text for text in clinicalDF[birth_year]]
         if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[birth_year]]):
             total_error = total_error + "Patient: Please double check your BIRTH_YEAR column.  This column must be integers or blank.\n"
@@ -162,7 +167,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     # Create patient Id in sample data
     if clinicalSampleDF.get(patientId) is None:
         clinicalSampleDF[patientId] = ["-".join(samp.split("-")[0:3]) for samp in clinicalSampleDF[sampleId]]
-    if clinicalSamplePath is None:
+    if clinicalSamplePath is not None:
         clinicalDF = clinicalDF.merge(clinicalSampleDF, on=patientId,how="outer")
     #CHECK: All patients must have associated sample data 
     if not all(clinicalSampleDF[patientId].isin(clinicalDF[patientId])):
@@ -175,85 +180,34 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     warn, error = checkMapping(clinicalDF,"PRIMARY_RACE","NAACCR_RACE_CODE_PRIMARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
     warning = warning + warn
     total_error  = total_error + error 
-    #CHECK: PRIMARY_RACE
-    # if clinicalDF.get("PRIMARY_RACE") is not None:
-    #     primary_race = "PRIMARY_RACE"
-    # else:
-    #     primary_race = "NAACCR_RACE_CODE_PRIMARY"
-    # error = checkColExist(clinicalDF, primary_race)
-    # if error != "":
-    #     warning = warning + "Patient: clinical file doesn't have PRIMARY_RACE or NAACCR_RACE_CODE_PRIMARY column. A blank column will be added\n"
-    # else:
-    #     if not all([isinstance(i, (int,float)) or i in [1,2,3,4,5,6,7,8,10,11,12,13,14,15,16] for i in clinicalDF[primary_race]]):
-    #         total_error = total_error + "Patient: Please double check your PRIMARY_RACE/NAACCR_RACE_CODE_PRIMARY column.  This column must be integers or blank.\n"
 
     #CHECK: SECONDARY_RACE
     warn, error = checkMapping(clinicalDF,"SECONDARY_RACE","NAACCR_RACE_CODE_SECONDARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
     warning = warning + warn
     total_error  = total_error + error 
-    # if clinicalDF.get("SECONDARY_RACE") is not None:
-    #     secondary_race = "SECONDARY_RACE"
-    # else:
-    #     secondary_race = "NAACCR_RACE_CODE_SECONDARY"
-    # error = checkColExist(clinicalDF, secondary_race)
-    # if error != "":
-    #     warning = warning + "Patient: clinical file doesn't have SECONDARY_RACE or NAACCR_RACE_CODE_SECONDARY column. A blank column will be added\n"
-    # else:
-    #     if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[secondary_race]]):
-    #         total_error = total_error + "Patient: Please double check your SECONDARY_RACE/NAACCR_RACE_CODE_SECONDARY column.  This column must be integers or blank.\n"
 
     #CHECK: TERTIARY_RACE
     warn, error = checkMapping(clinicalDF,"TERTIARY_RACE","NAACCR_RACE_CODE_TERTIARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
     warning = warning + warn
     total_error  = total_error + error 
-    # if clinicalDF.get("TERTIARY_RACE") is not None:
-    #     tertiary_race = "TERTIARY_RACE"
-    # else:
-    #     tertiary_race = "NAACCR_RACE_CODE_TERTIARY"
-    # error = checkColExist(clinicalDF, tertiary_race)
-    # if error != "":
-    #     warning = warning + "Patient: clinical file doesn't have TERTIARY_RACE or NAACCR_RACE_CODE_TERTIARY column. A blank column will be added\n"
-    # else:
-    #     if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[tertiary_race]]):
-    #         total_error = total_error + "Patient: Please double check your TERTIARY_RACE/NAACCR_RACE_CODE_TERTIARY column.  This column must be integers or blank.\n"
-
 
     #CHECK: SEX
-    warn, error = checkMapping(clinicalDF,"SEX","NAACCR_SEX_CODE",[1,2,3,4,5,6,9,""])
+    warn, error = checkMapping(clinicalDF,"SEX","NAACCR_SEX_CODE",[1,2,3,4,5,6,9,""], required=True)
     warning = warning + warn
     total_error  = total_error + error 
-    # if clinicalDF.get("SEX") is not None:
-    #     sex = "SEX"
-    # else:
-    #     sex = "NAACCR_SEX_CODE"
-    # error = checkColExist(clinicalDF, sex)
-    # if error != "":
-    #     total_error = total_error + "Patient: clinical file must have SEX or NAACCR_SEX_CODE column.\n"
-    # else:
-    #     if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[sex]]):
-    #         total_error = total_error + "Patient: Please double check your SEX/NAACCR_SEX_CODE column.  This column must be integers or blank.\n"
 
     #CHECK: ETHNICITY
     warn, error = checkMapping(clinicalDF,"ETHNICITY","NAACCR_ETHNICITY_CODE",[0,1,2,3,4,5,6,7,8,9,""])
     warning = warning + warn
     total_error  = total_error + error 
-    # if clinicalDF.get("ETHNICITY") is not None:
-    #     ethnicity = "ETHNICITY"
-    # else:
-    #     ethnicity = "NAACCR_ETHNICITY_CODE"
-    # error = checkColExist(clinicalDF, ethnicity)
-    # if error != "":
-    #     total_error = total_error + "Patient: clinical file doesn't have ETHNICITY or NAACCR_ETHNICITY_CODE column. A blank column will be added\n"
-    # else:
-    #     if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[ethnicity]]):
-    #         total_error = total_error + "Patient: Please double check your ETHNICITY/NAACCR_ETHNICITY_CODE column.  This column must be integers or blank.\n"
 
+    #Complete error message
     if total_error == "":
         message = "There is nothing wrong with your file!\n"
     else:
         message = message + total_error
-
-    message = message + warning
+    if warning != "":
+        message = message + "-------------WARNINGS-------------\n" + warning
     return(message)
 
 #VALIDATING MAF
