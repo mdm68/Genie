@@ -235,7 +235,7 @@ def validateMAF(filePath):
     """
 
     first_header = ['CHROMOSOME','HUGO_SYMBOL','TUMOR_SAMPLE_BARCODE']
-    correct_column_headers = ['CHROMOSOME','START_POSITION','HUGO_SYMBOL','REFERENCE_ALLELE','TUMOR_SEQ_ALLELE2','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH']
+    correct_column_headers = ['CHROMOSOME','START_POSITION','REFERENCE_ALLELE','TUMOR_SEQ_ALLELE2','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH'] #T_REF_COUNT + T_ALT_COUNT = T_DEPTH
     optional_headers = ['T_REF_COUNT','N_DEPTH','N_REF_COUNT','N_ALT_COUNT']
     
     mutationDF = pd.read_csv(filePath,sep="\t",comment="#")
@@ -250,7 +250,7 @@ def validateMAF(filePath):
     
     #CHECK: Everything in correct_column_headers must be in mutation file
     if not all([i in mutationDF.columns for i in correct_column_headers]):
-        total_error = total_error + "Your mutation file must at least have these headers: %s.\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
+        total_error = total_error + "Your mutation file must at least have these headers: %s. If you are missing T_DEPTH, you must have T_REF_COUNT!\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
     
     #CHECK: Mutation file would benefit from columns in optional_headers
     if not all([i in mutationDF.columns for i in optional_headers]):
