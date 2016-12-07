@@ -14,7 +14,8 @@ MAIN_TYPE_FIELD = 'metamaintype'
 CANCER_TYPE = 'CANCER_TYPE'
 CANCER_TYPE_DETAILED = 'CANCER_TYPE_DETAILED'
 ONCOTREE_CODE = 'ONCOTREE_CODE'
-ROOT_ONCOTREE_CODE = 'SECONDARY_ONCOTREE_CODE'
+ONCOTREE_PRIMARY_NODE = 'ONCOTREE_PRIMARY_NODE'
+ONCOTREE_SECONDARY_NODE = 'ONCOTREE_SECONDARY_NODE'
 SAMPLE_ID = 'SAMPLE_ID'
 NA = 'NA'
 
@@ -61,9 +62,9 @@ def get_cancer_types(oncotree, code):
 					except IndexError:
 						cancer_type = NA
 					# Found it, return to not keep processing more lines.
-					return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed, ROOT_ONCOTREE_CODE: re.sub('.+\((.+)\)',"\\1",data[header.index('secondary')])}			
+					return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed, ONCOTREE_PRIMARY_NODE: re.sub('.+\((.+)\)',"\\1",data[header.index('primary')]), ONCOTREE_SECONDARY_NODE: re.sub('.+\((.+)\)',"\\1",data[header.index('secondary')])}			
 	# Nothing was found, return NAs
-	return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed}
+	return {CANCER_TYPE: cancer_type, CANCER_TYPE_DETAILED: cancer_type_detailed, ONCOTREE_PRIMARY_NODE: NA, ONCOTREE_SECONDARY_NODE: NA}
 
 def process_clinical_file(oncotree, clinical_filename):
 	""" Insert cancer type/cancer type detailed in the clinical file """
@@ -79,8 +80,10 @@ def process_clinical_file(oncotree, clinical_filename):
 				header.append(CANCER_TYPE)
 			if CANCER_TYPE_DETAILED not in header:
 				header.append(CANCER_TYPE_DETAILED)
-			if ROOT_ONCOTREE_CODE not in header:
-				header.append(ROOT_ONCOTREE_CODE)
+			if ONCOTREE_PRIMARY_NODE not in header:
+				header.append(ONCOTREE_PRIMARY_NODE)
+			if ONCOTREE_SECONDARY_NODE not in header:
+				header.append(ONCOTREE_SECONDARY_NODE)
 			print '\t'.join(header).replace('\n', '')
 			continue
 		data = line.split('\t')
@@ -99,9 +102,13 @@ def process_clinical_file(oncotree, clinical_filename):
 		except IndexError:
 			data.append(cancer_types[CANCER_TYPE_DETAILED])
 		try:
-			data[header.index(ROOT_ONCOTREE_CODE)] = cancer_types[ROOT_ONCOTREE_CODE]
+			data[header.index(ONCOTREE_PRIMARY_NODE)] = cancer_types[ONCOTREE_PRIMARY_NODE]
 		except IndexError:
-			data.append(cancer_types[ROOT_ONCOTREE_CODE])
+			data.append(cancer_types[ONCOTREE_PRIMARY_NODE])
+		try:
+			data[header.index(ONCOTREE_SECONDARY_NODE)] = cancer_types[ONCOTREE_SECONDARY_NODE]
+		except IndexError:
+			data.append(cancer_types[ONCOTREE_SECONDARY_NODE])
 		print '\t'.join(data).replace('\n', '')
 
 def report_failed_matches():
