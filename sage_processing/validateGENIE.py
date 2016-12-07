@@ -429,6 +429,7 @@ def perform_main(args):
                 'fusion':validateFusion,
                 'seg':validateSEG}
     syn = synapse_login()
+    #CHECK: Fail if filename is incorrect
     try:
         validateFileName(args)
     except AssertionError as e:
