@@ -5,7 +5,6 @@ import synapseclient
 import os
 #import subprocess
 import argparse
-import csv
 import getpass
 import string
 
@@ -66,11 +65,25 @@ def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False
         else:
             warning = "%s: clinical file doesn't have %s column. A blank column will be added\n" % (fileType,primaryName)
     else:
-        if not all([i in mapping for i in clinicalDF[race]]):
-            error = "%s: Please double check your %s column.  This column must be these values %sand blank.\n" % (fileType, primaryName,", ".join(map(str,mapping)))
+        if not all([i in mapping.tolist() for i in clinicalDF[race]]):
+            error = "%s: Please double check your %s column.  This column must be these values %sor blank.\n" % (fileType, primaryName,", ".join(map(str,mapping)).replace(".0",""))
     return(warning, error)
 
-def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
+#Getting the GENIE mapping synapse tables
+def getGenieMapping(syn, synId):
+    """
+    This function gets the GENIE mapping tables
+    
+    :params synId:          Synapse Id of synapse table
+
+    :returns:               Table dataframe
+    """
+    table_ent = syn.tableQuery('SELECT * FROM %s' %synId)
+    table = table_ent.asDataFrame()
+    table = table.fillna("")
+    return(table)
+
+def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
     """
     This function validates the clinical file to make sure it adhere to the clinical SOP.
     
@@ -131,8 +144,10 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
     #CHECK: SAMPLE_TYPE
     error = checkColExist(clinicalSampleDF, "SAMPLE_TYPE")
     if error == "":
-        if not all([isinstance(i, (int,float)) or i in [1,2,3,4,5,6,7] for i in clinicalSampleDF['SAMPLE_TYPE']]):
-            total_error = total_error+"Sample: Please double check your SAMPLE_TYPE column. This column must be integers 1-7.\n"
+
+        if not all(clinicalSampleDF['SAMPLE_TYPE'].isin(sampleType_mapping['CODE'])):
+        #if not all([isinstance(i, (int,float)) or i in [1,2,3,4,5,6,7] for i in clinicalSampleDF['SAMPLE_TYPE']]):
+            total_error = total_error+"Sample: Please double check your SAMPLE_TYPE column. This column must be %s.\n" % ", ".join(map(str,sampleType_mapping['CODE']))
     else:
         total_error = total_error + "Sample: clinical file must have SAMPLE_TYPE column.\n"
 
@@ -183,27 +198,27 @@ def validateClinical(clinicalFilePath,oncotree_mapping,clinicalSamplePath=None):
         total_error = total_error + "Sample: All patients must have associated sample information\n"
 
     #CHECK: PRIMARY_RACE
-    warn, error = checkMapping(clinicalDF,"PRIMARY_RACE","NAACCR_RACE_CODE_PRIMARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
+    warn, error = checkMapping(clinicalDF,"PRIMARY_RACE","NAACCR_RACE_CODE_PRIMARY",race_mapping['CODE'])
     warning = warning + warn
     total_error  = total_error + error 
 
     #CHECK: SECONDARY_RACE
-    warn, error = checkMapping(clinicalDF,"SECONDARY_RACE","NAACCR_RACE_CODE_SECONDARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
+    warn, error = checkMapping(clinicalDF,"SECONDARY_RACE","NAACCR_RACE_CODE_SECONDARY",race_mapping['CODE'])
     warning = warning + warn
     total_error  = total_error + error 
 
     #CHECK: TERTIARY_RACE
-    warn, error = checkMapping(clinicalDF,"TERTIARY_RACE","NAACCR_RACE_CODE_TERTIARY",[1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,20,21,22,25,26,27,28,30,31,32,88,96,97,98,99,""])
+    warn, error = checkMapping(clinicalDF,"TERTIARY_RACE","NAACCR_RACE_CODE_TERTIARY",race_mapping['CODE'])
     warning = warning + warn
     total_error  = total_error + error 
 
     #CHECK: SEX
-    warn, error = checkMapping(clinicalDF,"SEX","NAACCR_SEX_CODE",[1,2,3,4,5,6,9,""], required=True)
+    warn, error = checkMapping(clinicalDF,"SEX","NAACCR_SEX_CODE",sex_mapping['CODE'], required=True)
     warning = warning + warn
     total_error  = total_error + error 
 
     #CHECK: ETHNICITY
-    warn, error = checkMapping(clinicalDF,"ETHNICITY","NAACCR_ETHNICITY_CODE",[0,1,2,3,4,5,6,7,8,9,""])
+    warn, error = checkMapping(clinicalDF,"ETHNICITY","NAACCR_ETHNICITY_CODE",ethnicity_mapping['CODE'])
     warning = warning + warn
     total_error  = total_error + error
 
@@ -293,14 +308,14 @@ def validateVCF(filePath):
     #the chr-prefix. variants on chrM are not supported
     nochr = ["chr" in i for i in vcf['#CHROM'] if isinstance(i, str)]
     if sum(nochr) > 0:
-        total_error = total_error + "Your vcf file must not have the chr prefix in front of chromosomes.\n"
+        warning = warning + "Your vcf file must not have the chr prefix in front of chromosomes.\n"
     if sum(vcf['#CHROM'].isin(["chrM"])) > 0:
         total_error = total_error + "Your vcf file must not have variants on chrM.\n"
 
     #No white spaces
     temp = vcf.apply(lambda x: contains_whitespace(x), axis=1)
     if sum(temp) >0:
-        total_error = total_error + "Your vcf file must not have any white spaces in any of the columns.\n"
+        warning = warning + "Your vcf file must not have any white spaces in any of the columns.\n"
     #I can also recommend a `bcftools query` command that will parse a VCF in a detailed way, 
     #and output with warnings or errors if the format is not adhered too
     return(total_error, warning)
@@ -380,26 +395,25 @@ def validateSEG(filePath):
 def validateFileName(args):
     VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
                          'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
-                         'vcf':"GENIE-%s",
+                         'vcf':"GENIE-%s-",
                          'cnv':"data_CNA_%s.txt",
                          'fusion':"data_fusions_%s.txt",
                          'seg':"genie_data_cna_hg19_%s.seg"}
 
-
+    assert all([os.path.isfile(filename) for filename in args.file]), "Files must exist on the drive"
     if args.fileType == "clinical":
         formatting = [i % args.center for i in VALIDATE_FILENAME[args.fileType]]
         if len(args.file) > 1:
-            assert len(set(args.file)) > 1, "Must submit two different filenames"
-            assert sum([os.path.basename(i) in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s" % ", ".join(formatting[1:3]) 
+            assert len(set(args.file)) > 1, "Must submit two different filenames!"
+            assert sum([os.path.basename(i) in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s!" % ", ".join(formatting[1:3]) 
         else:
-            assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s" % formatting[0]
+            assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s!" % formatting[0]
     else:
         formatting = VALIDATE_FILENAME[args.fileType] % args.center
-
         if args.fileType == "vcf":
-            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId" % args.center 
+            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId!" % args.center 
         else:
-            assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s" % (args.fileType, formatting)
+            assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s!" % (args.fileType, formatting)
 
 def perform_main(args):
     """
@@ -418,26 +432,23 @@ def perform_main(args):
     try:
         validateFileName(args)
     except AssertionError as e:
-        print("Your filename is incorrect! %s"  % e)
+        raise ValueError("Your filename is incorrect! %s Please change your filename before you run the validator again."  % e)
+    
     validate_func = VALIDATE_MAPPING[args.fileType]
     if args.fileType == "clinical":
-        oncotree_mapping_ent = syn.tableQuery('SELECT * FROM syn7437073')
-        oncotree_mapping = oncotree_mapping_ent.asDataFrame()
-        if len(args.file) > 1:
-            for filename in args.file:
-                if not os.path.isfile(filename):
-                    raise ValueError("File doesn't exist")
-                if "patient" not in filename.lower() and "sample" not in filename.lower():
-                    raise ValueError("You can only specify two files when validating clinical files. 'patient' and 'sample' must exist in either filenames")
+        oncotree_mapping = getGenieMapping(syn, "syn7437073")
+        sampleType_mapping = getGenieMapping(syn, "syn7434273")
+        ethnicity_mapping = getGenieMapping(syn, "syn7434242")
+        race_mapping = getGenieMapping(syn, "syn7434236")
+        sex_mapping = getGenieMapping(syn, "syn7434222")
 
+        if len(args.file) > 1:
             if "patient" in args.file[0].lower():
-                total_error, warning = validate_func(args.file[0],oncotree_mapping,args.file[1])
+                total_error, warning = validate_func(args.file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=args.file[1])
             else:
-                total_error, warning = validate_func(args.file[1],oncotree_mapping,args.file[0])
+                total_error, warning = validate_func(args.file[1],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=args.file[0])
         else:
-            if not os.path.isfile(args.file[0]):
-                raise ValueError("File doesn't exist")
-            total_error, warning = validate_func(args.file[0],oncotree_mapping)
+            total_error, warning = validate_func(args.file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping)
     else:
         total_error, warning = validate_func(args.file[0])
     
