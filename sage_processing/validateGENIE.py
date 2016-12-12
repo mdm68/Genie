@@ -235,10 +235,13 @@ def validateMAF(filePath):
     """
 
     first_header = ['CHROMOSOME','HUGO_SYMBOL','TUMOR_SAMPLE_BARCODE']
-    correct_column_headers = ['CHROMOSOME','START_POSITION','REFERENCE_ALLELE','TUMOR_SEQ_ALLELE2','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH'] #T_REF_COUNT + T_ALT_COUNT = T_DEPTH
+    correct_column_headers = ['CHROMOSOME','START_POSITION','REFERENCE_ALLELE','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH'] #T_REF_COUNT + T_ALT_COUNT = T_DEPTH
     optional_headers = ['T_REF_COUNT','N_DEPTH','N_REF_COUNT','N_ALT_COUNT']
+    tumors = ['TUMOR_SEQ_ALLELE2','TUMOR_SEQ_ALLELE1']
     
-    mutationDF = pd.read_csv(filePath,sep="\t",comment="#")
+    mutationDF = pd.read_csv(filePath,sep="\t",comment="#",na_values = ['-1.#IND', '1.#QNAN', '1.#IND', 
+                             '-1.#QNAN', '#N/A N/A', '#N/A', 'N/A', '#NA', 'NULL', 'NaN', 
+                             '-NaN', 'nan','-nan',''],keep_default_na=False)
     mutationDF.columns = [col.upper() for col in mutationDF.columns]
 
     total_error = ""
@@ -252,6 +255,18 @@ def validateMAF(filePath):
     if not all([i in mutationDF.columns for i in correct_column_headers]):
         total_error = total_error + "Your mutation file must at least have these headers: %s. If you are missing T_DEPTH, you must have T_REF_COUNT!\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
     
+    #CHECK: Must have either Tumor_Seq_Allele1 or 2
+    tumor_cols = [i for i in tumors if i in mutationDF.columns.values]
+    if len(tumor_cols) == 0:
+        total_error = total_error + "Your mutation file must at least have one of these headers: %s." % ",".join(tumors)
+
+    for i in tumor_cols:
+        if sum(mutationDF[i] == "NA") > 0:
+            warning = warning + "Your %s column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n" % i
+
+    if sum(mutationDF['REFERENCE_ALLELE'] == "NA") > 0:
+        warning = warning + "Your REFERENCE_ALLELE column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n"
+
     #CHECK: Mutation file would benefit from columns in optional_headers
     if not all([i in mutationDF.columns for i in optional_headers]):
         warning = warning + "Your mutation file does not have the column headers that can give extra information to the processed mutation file: %s.\n" % ", ".join([i for i in optional_headers if i not in mutationDF.columns.values ])      
