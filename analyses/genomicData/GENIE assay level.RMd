@@ -11,10 +11,10 @@ output: html_document
 # libraries
 library(synapseClient)
 library(knitr)
-library(lattice)
+library(ggplot2)
 
 # login to SAGE
-synapseLogin(username="",password="") # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
 
 # read aggregated MAF file
 genieMutData = read.delim(synGet("syn5571527")@filePath,header=TRUE,sep="\t",quote="",comment="",skip = 1)
@@ -25,9 +25,12 @@ genieMutData$t_alt_count_num = as.numeric(levels(genieMutData$t_alt_count))[geni
 genieMutData$t_alt_count_num[noVAF.idx] = 1
 genieMutData$t_depth[noVAF.idx] = 1
 
+# germline filter index
+nongermline.idx = genieMutData$FILTER!="common_variant"
+
 ```
 
-### SUB vs INS vs DEL
+### SUB vs INS vs DEL (pre-germline filter)
 
 ```{r, echo=FALSE}
 
@@ -44,11 +47,33 @@ t$Center = rownames(t)
 t = reshape(t,direction="long",idvar=("Center"),varying=c("SUB","INS","DEL"),v.names="Percentage",times=c("SUB","INS","DEL"))
 colnames(t)[colnames(t)=="time"] = "Type"
 t$Type = factor(t$Type,c("SUB","INS","DEL"))
-barchart( t$Percentage ~ t$Type | t$Center,ylim=c(0,1))
+ggplot(t,aes(Type,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(~Center,ncol=4)+ylim(0,1)
 
 ```
 
-### SUB Length
+### SUB vs INS vs DEL (post-germline filter)
+
+```{r, echo=FALSE}
+
+# SUB vs INS/DEL TABLE
+k = which(nongermline.idx)
+t = as.data.frame.matrix(table(genieMutData$Center[k],genieMutData$Variant_Type[k]))
+t = as.data.frame(cbind(rowSums(t[,c("SNP","DNP","TNP","ONP")]),t[,"INS"],t[,"DEL"]))
+colnames(t) = c("SUB","INS","DEL")
+t = data.frame(n=rowSums(t),t)
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t[order(t$SUB),],digits=3)
+
+# SUB vs INS/DEL BARCHARTS
+t$Center = rownames(t)
+t = reshape(t,direction="long",idvar=("Center"),varying=c("SUB","INS","DEL"),v.names="Percentage",times=c("SUB","INS","DEL"))
+colnames(t)[colnames(t)=="time"] = "Type"
+t$Type = factor(t$Type,c("SUB","INS","DEL"))
+ggplot(t,aes(Type,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(~Center,ncol=4)+ylim(0,1)
+
+```
+
+### SUB Length (pre-germline filter)
 
 ```{r, echo=FALSE}
 
@@ -61,16 +86,33 @@ t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
 kable(t[order(t[,2]),],digits=3)
 
 # SUB HISTOGRAMS
-histogram(~nchar(as.character(genieMutData$Tumor_Seq_Allele2[k]))|genieMutData$Center[k],breaks=c(0.5:20.5,30,40),xlim=c(0,10),ftype="percent",right=FALSE)
+ggplot(genieMutData[k,],aes(nchar(as.character(Tumor_Seq_Allele2)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,8)
 
 ```
 
-### INS Length
+### SUB Length (post-germline filter)
+
+```{r, echo=FALSE}
+
+# SUB TABLES
+k = which((genieMutData$Reference_Allele!="-")&(genieMutData$Tumor_Seq_Allele2!="-")&(nchar(as.character(genieMutData$Reference_Allele))==nchar(as.character(genieMutData$Tumor_Seq_Allele2)))&nongermline.idx)
+t = as.data.frame.matrix(table(genieMutData$Center[k],nchar(as.character(genieMutData$Reference_Allele[k]))))
+t = data.frame(n=rowSums(t),t)
+colnames(t) = sub("X","",colnames(t))
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t[order(t[,2]),],digits=3)
+
+# SUB HISTOGRAMS
+ggplot(genieMutData[k,],aes(nchar(as.character(Tumor_Seq_Allele2)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,8)
+
+```
+
+### INS Length (pre-germline filter)
 
 ```{r, echo=FALSE}
 
 # INS TABLE
-k = which((genieMutData$Reference_Allele=="-") | (nchar(as.character(genieMutData$Reference_Allele))<nchar(as.character(genieMutData$Tumor_Seq_Allele2))))
+k = which((genieMutData$Reference_Allele=="-")|(nchar(as.character(genieMutData$Reference_Allele))<nchar(as.character(genieMutData$Tumor_Seq_Allele2))))
 t = as.data.frame.matrix(table(genieMutData$Center[k],nchar(as.character(genieMutData$Tumor_Seq_Allele2[k]))))
 t = data.frame(n=rowSums(t),t)
 colnames(t) = sub("X","",colnames(t))
@@ -78,16 +120,33 @@ t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
 kable(t[order(t[,2]),],digits=3)
 
 # INS HISTOGRAMS
-histogram(~nchar(as.character(genieMutData$Tumor_Seq_Allele2[k]))|genieMutData$Center[k],ftype="percent",breaks=c(0.5:20.5,30,40,50,100,200),xlim=c(0,20),right=TRUE)
+ggplot(genieMutData[k,],aes(nchar(as.character(Tumor_Seq_Allele2)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,20)
 
 ```
 
-### DEL Length
+### INS Length (post-germline filter)
+
+```{r, echo=FALSE}
+
+# INS TABLE
+k = which((genieMutData$Reference_Allele=="-")|(nchar(as.character(genieMutData$Reference_Allele))<nchar(as.character(genieMutData$Tumor_Seq_Allele2)))&nongermline.idx)
+t = as.data.frame.matrix(table(genieMutData$Center[k],nchar(as.character(genieMutData$Tumor_Seq_Allele2[k]))))
+t = data.frame(n=rowSums(t),t)
+colnames(t) = sub("X","",colnames(t))
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t[order(t[,2]),],digits=3)
+
+# INS HISTOGRAMS
+ggplot(genieMutData[k,],aes(nchar(as.character(Tumor_Seq_Allele2)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,20)
+
+```
+
+### DEL Length (pre-germline filter)
 
 ```{r, echo=FALSE}
 
 # DEL TABLE
-k = which((genieMutData$Tumor_Seq_Allele2=="-") | (nchar(as.character(genieMutData$Reference_Allele))>nchar(as.character(genieMutData$Tumor_Seq_Allele2))))
+k = which((genieMutData$Tumor_Seq_Allele2=="-")|(nchar(as.character(genieMutData$Reference_Allele))>nchar(as.character(genieMutData$Tumor_Seq_Allele2))))
 t = as.data.frame.matrix(table(genieMutData$Center[k],nchar(as.character(genieMutData$Reference_Allele[k]))))
 t = data.frame(n=rowSums(t),t)
 colnames(t) = sub("X","",colnames(t))
@@ -95,16 +154,37 @@ t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
 kable(t[order(t[,2]),],digits=3)
 
 # DEL HISTOGRAMS
-histogram(~nchar(as.character(genieMutData$Tumor_Seq_Allele2[k]))|genieMutData$Center[k],ftype="percent",breaks=c(0.5:20.5,30,40,50,100,200),xlim=c(0,20),right=TRUE)
+
+ggplot(genieMutData[k,],aes(nchar(as.character(Reference_Allele)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,20)
 
 ```
 
-### SNV type
+
+### DEL Length (post-germline filter)
+
+```{r, echo=FALSE}
+
+# DEL TABLE
+k = which((genieMutData$Tumor_Seq_Allele2=="-")|(nchar(as.character(genieMutData$Reference_Allele))>nchar(as.character(genieMutData$Tumor_Seq_Allele2)))&nongermline.idx)
+t = as.data.frame.matrix(table(genieMutData$Center[k],nchar(as.character(genieMutData$Reference_Allele[k]))))
+t = data.frame(n=rowSums(t),t)
+colnames(t) = sub("X","",colnames(t))
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t[order(t[,2]),],digits=3)
+
+# DEL HISTOGRAMS
+
+ggplot(genieMutData[k,],aes(nchar(as.character(Reference_Allele)),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),stat="count")+facet_wrap(~Center,ncol=4)+xlim(0,20)
+
+```
+
+### SNV type (pre-germline filter)
 
 ```{r, echo=FALSE}
 
 # SNV type breakdown TABLE
-t = as.data.frame.matrix(table(genieMutData$Center[genieMutData$Variant_Type=="SNP"],paste(genieMutData$Reference_Allele[genieMutData$Variant_Type=="SNP"],".",genieMutData$Tumor_Seq_Allele2[genieMutData$Variant_Type=="SNP"])))
+k = which(genieMutData$Variant_Type=="SNP")
+t = as.data.frame.matrix(table(genieMutData$Center[k],paste(genieMutData$Reference_Allele[k],".",genieMutData$Tumor_Seq_Allele2[k])))
 t = data.frame(n=rowSums(t),t)
 colnames(t)[2:13] = sub("\\.\\.\\."," -> ",colnames(t)[2:13])
 t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
@@ -114,24 +194,62 @@ kable(t,digits=3)
 t$Center = rownames(t)
 t = reshape(t,direction="long",idvar=("Center"),varying=colnames(t)[2:13],v.names="Percentage",times=colnames(t)[2:13],drop="n")
 colnames(t)[colnames(t)=="time"] = "Type"
-barchart( t$Type ~ t$Percentage | t$Center,xlim=c(0,0.4))
+ggplot(t,aes(Type,Percentage,group=Center))+geom_bar(stat="identity")+coord_flip()+facet_wrap(~Center,ncol=4)
 
 ```
 
-### VAF distribution for SUBs
+### SNV type (post-germline filter)
+
+```{r, echo=FALSE}
+
+# SNV type breakdown TABLE
+k = which((genieMutData$Variant_Type=="SNP")&nongermline.idx)
+t = as.data.frame.matrix(table(genieMutData$Center[k],paste(genieMutData$Reference_Allele[k],".",genieMutData$Tumor_Seq_Allele2[k])))
+t = data.frame(n=rowSums(t),t)
+colnames(t)[2:13] = sub("\\.\\.\\."," -> ",colnames(t)[2:13])
+t[,colnames(t)!="n"] = t[,colnames(t)!="n"]/rowSums(t[,colnames(t)!="n"])
+kable(t,digits=3)
+
+# SNV type breakdown BARCHARTS
+t$Center = rownames(t)
+t = reshape(t,direction="long",idvar=("Center"),varying=colnames(t)[2:13],v.names="Percentage",times=colnames(t)[2:13],drop="n")
+colnames(t)[colnames(t)=="time"] = "Type"
+ggplot(t,aes(Type,Percentage,group=Center))+geom_bar(stat="identity")+coord_flip()+facet_wrap(~Center,ncol=4)
+
+```
+
+### VAF distribution for SUBs (pre-germline filter)
 
 ```{r, echo=FALSE}
 
 k = which(!((genieMutData$Variant_Type=="INS")|(genieMutData$Variant_Type=="DEL")))
-histogram(~genieMutData$t_alt_count_num[k]/genieMutData$t_depth[k]|genieMutData$Center[k],ftype="percent",breaks=seq(0,1,0.02),right=FALSE)
+ggplot(genieMutData[k,],aes(x=(t_alt_count_num/t_depth),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),breaks=seq(0,1,0.02),closed="left")+facet_wrap(~Center,ncol=4)
 
 ```
 
-### VAF distribution for INS/DEL
+### VAF distribution for SUBs (post-germline filter)
+
+```{r, echo=FALSE}
+
+k = which(nongermline.idx&!((genieMutData$Variant_Type=="INS")|(genieMutData$Variant_Type=="DEL")))
+ggplot(genieMutData[k,],aes(x=(t_alt_count_num/t_depth),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),breaks=seq(0,1,0.02),closed="left")+facet_wrap(~Center,ncol=4)
+
+```
+
+### VAF distribution for INS/DEL (pre-germline filter)
 
 ```{r, echo=FALSE}
 
 k = which(((genieMutData$Variant_Type=="INS")|(genieMutData$Variant_Type=="DEL")))
-histogram(~(genieMutData$t_alt_count_num[k]/genieMutData$t_depth[k])|genieMutData$Center[k],ftype="percent",breaks=seq(0,1,0.02),right=FALSE)
+ggplot(genieMutData[k,],aes(x=(t_alt_count_num/t_depth),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),breaks=seq(0,1,0.02),closed="left")+facet_wrap(~Center,ncol=4)
+
+```
+
+### VAF distribution for INS/DEL (pre-germline filter)
+
+```{r, echo=FALSE}
+
+k = which(nongermline.idx&((genieMutData$Variant_Type=="INS")|(genieMutData$Variant_Type=="DEL")))
+ggplot(genieMutData[k,],aes(x=(t_alt_count_num/t_depth),group=Center))+geom_histogram(aes(y = (..count..)/tapply(..count..,..group..,sum)[..group..]),breaks=seq(0,1,0.02),closed="left")+facet_wrap(~Center,ncol=4)
 
 ```
