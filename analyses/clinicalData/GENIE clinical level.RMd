@@ -15,7 +15,7 @@ library(ggplot2)
 
 
 # login to SAGE
-synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username="baras@jhmi.edu",password="AjQ8j8r?") # you could do this with prompt or coded, but will need to enter something here
 
 # get clinical data file from SAGE
 genieClinData = read.delim(synGet("syn7392892")@filePath)
@@ -166,9 +166,9 @@ ggplot(t,aes(Sex,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(
 
 genieClinData$age_days = as.numeric(levels(genieClinData$AGE_AT_SEQ_REPORT))[genieClinData$AGE_AT_SEQ_REPORT]
 k = grep("^>",genieClinData$AGE_AT_SEQ_REPORT) # these are the >=90 group that get mapped to 90
-genieClinData$age_days[k] = 90*365
+genieClinData$age_days[k] = 32872
 k = grep("^<",genieClinData$AGE_AT_SEQ_REPORT) # these are the <=18 group that get mapped to 18
-genieClinData$age_days[k] = 18*365
+genieClinData$age_days[k] = 6573
 
 ```
 
@@ -182,52 +182,19 @@ kable(data.frame("Percent.Unknown"=(t[,"TRUE"]/rowSums(t))*100),digits=2)
 
 ```
 
-### site histograms for age at seq reporting histograms
-
-anything starting with ">" is mapped to to 90-108 (18 year bin)
-
-(it looks like SAGE has already age redacted the >=90y bin across site)
-
-
-```{r, echo=FALSE}
-
-k = !is.na(genieClinData$age_days)
-ggplot(genieClinData[k,],aes(x=(age_days/365),group=CENTER))+geom_histogram(aes(y = (..count..)/width/tapply(..count..,..group..,sum)[..group..]),breaks=c(0,seq(1,89,2),90,108),closed="left")+facet_wrap(~CENTER,ncol=4)
-
-```
-
-### site breakdown for age at seq reported at as days <18y (numeric value)
-
-(there are none for >90, since it looks like SAGE is arleady taking care of those)
-
-
-```{r, echo=FALSE}
-
-k = genieClinData$age_days
-k[!is.na(genieClinData$age_days)] = "(18y,90y)"
-k[is.na(genieClinData$age_days)] = NA
-k[genieClinData$age_days<(18*365)] = "<18y"
-k[genieClinData$age_days>(90*365)] = ">90y"
-t = as.data.frame.matrix(table(genieClinData$CENTER,k))
-t$n = rowSums(t)
-t = t[,-2]
-kable(t)
-
-```
-
 ### site breakdown for age at seq reporting histograms
 
-anything starting with ">" is mapped to to 90-108 (18 year bin)
+anything starting with ">" is mapped to 32872 days and represented by an 18 year bin on the histogram
 
-anything starting with "<" is mapped to to 0-18 (18 year bin)
+anything starting with "<" is mapped to to 6573 and represented by an 18 year bin on the histogram
 
-anything with numerical days < 18y is mapped to to 0-18 (18 year bin)
+SAGE is redacting anything submitted with age <6573 or >32872
 
 Note: histograms as being presented as density now that bins are not equal size
 
+
 ```{r, echo=FALSE}
 
-genieClinData$age_days[genieClinData$age_days<(18*365)] = 18*365
 k = !is.na(genieClinData$age_days)
 ggplot(genieClinData[k,],aes(x=(age_days/365),group=CENTER))+geom_histogram(aes(y = (..count..)/width/tapply(..count..,..group..,sum)[..group..]),breaks=c(0,seq(19,89,2),90,108),closed="left")+facet_wrap(~CENTER,ncol=4)
 
