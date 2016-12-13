@@ -10,13 +10,12 @@ output: html_document
 
 # libraries
 library(synapseClient)
-library(RCurl)
 library(knitr)
-library(lattice)
+library(ggplot2)
 
 
 # login to SAGE
-synapseLogin(username="",password="") # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
 
 # get clinical data file from SAGE
 genieClinData = read.delim(synGet("syn7392892")@filePath)
@@ -69,7 +68,7 @@ l = c("White","Black","Asian","Native.American","Other")
 t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Race"
 t$Race = factor(t$Race,l)
-barchart( t$Race ~ t$Percentage | t$Center,xlim=c(0,1))
+ggplot(t,aes(Race,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(~Center,ncol=4)+ylim(0,1)+coord_flip()
 
 ```
 
@@ -116,7 +115,7 @@ l = c("Non.Spanish.non.Hispanic","Spanish.Hispanic")
 t = reshape(t[k,],direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Ethnicity"
 t$Ethnicity = factor(t$Ethnicity,l)
-barchart( t$Ethnicity ~ t$Percentage | t$Center,xlim=c(0,1))
+ggplot(t,aes(Ethnicity,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(~Center,ncol=4)+ylim(0,1)+coord_flip()
 
 ```
 
@@ -152,7 +151,8 @@ l = c("Female","Male")
 t = reshape(t,direction="long",idvar=("Center"),varying=l,v.names="Percentage",times=l,drop="n")
 colnames(t)[colnames(t)=="time"] = "Sex"
 t$Sex = factor(t$Sex,l)
-barchart( t$Sex ~ t$Percentage | t$Center,xlim=c(0,1))
+ggplot(t,aes(Sex,Percentage,group=Center))+geom_bar(stat="identity")+facet_wrap(~Center,ncol=4)+ylim(0,1)+coord_flip()
+
 
 ```
 
@@ -192,7 +192,7 @@ anything starting with ">" is mapped to to 90-108 (18 year bin)
 ```{r, echo=FALSE}
 
 k = !is.na(genieClinData$age_days)
-histogram(~(genieClinData$age_days[k]/365)|genieClinData$CENTER[k],type="density",breaks=c(0,seq(1,89,2),90,108),right=FALSE)
+ggplot(genieClinData[k,],aes(x=(age_days/365),group=CENTER))+geom_histogram(aes(y = (..count..)/width/tapply(..count..,..group..,sum)[..group..]),breaks=c(0,seq(1,89,2),90,108),closed="left")+facet_wrap(~CENTER,ncol=4)
 
 ```
 
@@ -229,7 +229,7 @@ Note: histograms as being presented as density now that bins are not equal size
 
 genieClinData$age_days[genieClinData$age_days<(18*365)] = 18*365
 k = !is.na(genieClinData$age_days)
-histogram(~(genieClinData$age_days[k]/365)|genieClinData$CENTER[k],type="density",breaks=c(0,seq(19,89,2),90,108),right=FALSE)
+ggplot(genieClinData[k,],aes(x=(age_days/365),group=CENTER))+geom_histogram(aes(y = (..count..)/width/tapply(..count..,..group..,sum)[..group..]),breaks=c(0,seq(19,89,2),90,108),closed="left")+facet_wrap(~CENTER,ncol=4)
 
 ```
 
