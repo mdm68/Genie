@@ -15,7 +15,7 @@ library(ggplot2)
 
 
 # login to SAGE
-synapseLogin(username="baras@jhmi.edu",password="AjQ8j8r?") # you could do this with prompt or coded, but will need to enter something here
+synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
 
 # get clinical data file from SAGE
 genieClinData = read.delim(synGet("syn7392892")@filePath)
