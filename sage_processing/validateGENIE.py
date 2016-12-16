@@ -294,10 +294,7 @@ def validateVCF(filePath):
     :params filePath:     Path to VCF file
 
     :returns:             Text with all the errors in the VCF file
-    """
-
-    message="Below are some of the issues with your files:\n"
-    
+    """    
     REQUIRED_HEADERS = ["#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO"]
     #FORMAT is optional
     total_error = ""
@@ -345,7 +342,6 @@ def validateCNV(filePath):
     :returns:             Text with all the errors in the CNV file
     """
     total_error = ""
-    message="Below are some of the issues with your files:\n"
     warning = ""
     cnvDF = pd.read_csv(filePath,sep="\t",comment="#")
     cnvDF.columns = [col.upper() for col in cnvDF.columns]
@@ -399,8 +395,9 @@ def validateSEG(filePath):
     warning = ""
 
     segDF = pd.read_csv(filePath,sep="\t",comment="#")
+    segDF.columns = [col.upper() for col in segDF.columns]
 
-    REQUIRED_HEADERS = ['ID','chromosome','loc.start','loc.end','num.mark','seg.mean']
+    REQUIRED_HEADERS = ['ID','CHROMOSOME','LOC.START','LOC.END','NUM.MARK','SEG.MEAN']
     
     if not all(segDF.columns.isin(REQUIRED_HEADERS)):
         total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
@@ -422,6 +419,7 @@ def validateFileName(args):
             assert len(set(args.file)) > 1, "Must submit two different filenames!"
             assert sum([os.path.basename(i) in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s!" % ", ".join(formatting[1:3]) 
         else:
+            assert "patient" not in args.file[0] and "sample" not in args.file[0], "If you submit a patient or sample file, you must submit both at the same time: eg. python validateGENIE.py clinical data_clinical_supp_patient_SAGE.txt data_clinical_supp_sample_SAGE.txt SAGE"
             assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s!" % formatting[0]
     else:
         formatting = VALIDATE_FILENAME[args.fileType] % args.center
@@ -448,7 +446,7 @@ def perform_main(args):
     try:
         validateFileName(args)
     except AssertionError as e:
-        raise ValueError("Your filename is incorrect! %s Please change your filename before you run the validator again."  % e)
+        raise ValueError("Your filename is incorrect!\n%s\nPlease change your filename before you run the validator again."  % e)
     
     validate_func = VALIDATE_MAPPING[args.fileType]
     if args.fileType == "clinical":
