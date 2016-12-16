@@ -3,7 +3,7 @@ library(synapseClient)
 library(VariantAnnotation)
 
 # SAGE login
-synapseLogin(username=,password=) # put your name and password
+synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
 
 # read aggregated clinical data
 genieClinData = read.delim(synGet("syn7392892")@filePath,header=TRUE)
@@ -39,6 +39,14 @@ genieMutData = genieMutData[!((genieMutData$Center=="JHH")&(mafVR %in% chad.blac
 mafVR = VRanges(seqnames=Rle(paste0("chr",genieMutData$Chromosome)),ranges=IRanges(start=genieMutData$Start_Position,end=genieMutData$End_Position),ref=genieMutData$Reference_Allele,alt=genieMutData$Tumor_Seq_Allele2,altDepth=genieMutData$t_alt_count_num,totalDepth=genieMutData$t_depth,sampleNames=genieMutData$Tumor_Sample_Barcode)
 seqlevels(mafVR) = sort(seqlevels(mafVR))
 
+# get GRanges for each bed
+bedGR = split(genieBedData, factor(genieBedData$SEQ_ASSAY_ID))
+bedGR = lapply(bedGR, function(x) {
+  GR = GRanges(seqnames=Rle(paste0("chr",x$Chromosome)),ranges=IRanges(start=x$Start_Position,end=x$End_Position))
+  seqlevels(GR) = sort(seqlevels(GR))
+  return(GR)
+})
+
 # restrict to not "commmon" germline filter and not silent
 mafFilter = (genieMutData$FILTER!="common_variant") & (genieMutData$Variant_Classification!="Silent")
 
@@ -46,7 +54,7 @@ mafFilter = (genieMutData$FILTER!="common_variant") & (genieMutData$Variant_Clas
 mafVR = mafVR[mafFilter]
 
 # sample based on tumor type filter
-samples.idx = which(genieClinData$CANCER_TYPE=="Melanoma")
+samples.idx = which(genieClinData$CANCER_TYPE=="Colorectal Cancer")
 
 # MAF indices - logical index against aggregated MAF, based on tumor type samples + filters
 maf.idx = (genieMutData$Tumor_Sample_Barcode %in% genieClinData$SAMPLE_ID[samples.idx]) & mafFilter
@@ -55,14 +63,6 @@ maf.idx = (genieMutData$Tumor_Sample_Barcode %in% genieClinData$SAMPLE_ID[sample
 uniqVar = unique(genieMutData[maf.idx,c("Chromosome","Hugo_Symbol","Start_Position","End_Position","Reference_Allele","Tumor_Seq_Allele2","HGVSp_Short","HGVSc")])
 uniqVar$mutVR = VRanges(seqnames=Rle(paste0("chr",uniqVar$Chromosome)),ranges=IRanges(start=uniqVar$Start_Position,end=uniqVar$End_Position),ref=uniqVar$Reference_Allele,alt=uniqVar$Tumor_Seq_Allele2)
 seqlevels(uniqVar$mutVR) = sort(seqlevels(uniqVar$mutVR))
-
-# get GRanges for each bed
-bedGR = split(genieBedData, factor(genieBedData$SEQ_ASSAY_ID))
-bedGR = lapply(bedGR, function(x) {
-  GR = GRanges(seqnames=Rle(paste0("chr",x$Chromosome)),ranges=IRanges(start=x$Start_Position,end=x$End_Position))
-  seqlevels(GR) = sort(seqlevels(GR))
-  return(GR)
-})
 
 # get boolean vectors for unique variants across each panel
 uniqVar[,names(bedGR)] = lapply(bedGR, function(x){ uniqVar$mutVR %over% x })
@@ -141,49 +141,51 @@ a = rowsum(t(1*((uniqVar[,as.character(genieClinData$SAMPLE_ID[samples.idx])]>0)
 # count of true non-detects (ie coverage is there but variant is not reported)
 b = rowsum(t(1*((uniqVar[,as.character(genieClinData$SAMPLE_ID[samples.idx])]==0)&(!is.na(uniqVar[,as.character(genieClinData$SAMPLE_ID[samples.idx])])))),group=genieClinData$CENTER[samples.idx])
 
-# seen in at least 1 sample in at least 1 site
-k = which(colSums(a>=1)>=1)
-# site has at least 50 samples & in least 1 variant
+# VARIANT FILTER - seen in at least 1 sample in at least 1 site
+k = which(colSums(a>=5)>=1)
+# SITE FILTER - site has at least 50 samples & in least 1 variant
 j = which(rowSums((a[,k]+b[,k])>=50)>=1)
 
-# get detection rate at variant level as data.frame with filters applied
+# get detection rate at VARIANT level as data.frame with filters applied
 d = as.data.frame(a[j,k]/(a[j,k]+b[j,k]))
-colnames(d) = k
-d$Center = rownames(d)
-# reshape to long format for geom_tile of ggplot
-d = reshape(d,direction="long",idvar="Center",varying=as.character(k),v.names="test",times=as.character(k))
-colnames(d) = c("Center","idx","Detect.Rate")
-d$idx = as.numeric(d$idx)
-# add in gene symbol and variant descriptor -- you can customized here
-d$Hugo_Symbol = uniqVar$Hugo_Symbol[d$idx]
-d$Variant = paste0(uniqVar$Hugo_Symbol[d$idx]," ",uniqVar$HGVSp_Short[d$idx]," (",uniqVar$Chromosome[d$idx],":",uniqVar$Start_Position[d$idx],":",uniqVar$Reference_Allele[d$idx],":",uniqVar$Tumor_Seq_Allele2[d$idx],")")
-# sort variants by coverage across site and detection rate -- this is done ultimately by sorting the levels of the factor
-l = aggregate(Detect.Rate ~ (Variant + Hugo_Symbol),d,function(x) {c(min(x,na.rm=TRUE),mean(is.na(x)))},na.action=NULL)
-l = l[order(-l$Detect.Rate[,2],l$Detect.Rate[,1],decreasing=TRUE),]
-d$Variant = factor(d$Variant,levels=l$Variant)
-# sort sites by number of variants with calls made -- this is done ultimately by sorting the levels of the factor
-l = aggregate(Detect.Rate ~ Center,d,function(x) {mean((x>0)&(!is.na(x)))},na.action=NULL)
-l = l[order(l$Detect.Rate,decreasing=FALSE),]
-d$Center = factor(d$Center,levels=l$Center)
-# plot
-ggplot(d, aes(Hugo_Symbol,Center)) + geom_tile(aes(fill=Detect.Rate),colour="white") + scale_fill_gradientn(colours=c("grey95","lightblue1","red"),values=c(0,0.0000000001,1),na.value="grey50") + labs(x ="",y="") + theme(axis.text.x=element_text(angle=90,hjust=0,vjust=0.5,size=8),axis.text.y=element_text(size=8)) + scale_x_discrete(expand=c(0, 0),position="top") + scale_y_discrete(expand=c(0, 0))
+var.idx = k[colnames(d)]
+# label HUGO + HGSVp + genomic
+# var.labels = paste0(uniqVar$Hugo_Symbol[var.idx]," ",uniqVar$HGVSp_Short[var.idx]," (",uniqVar$Chromosome[var.idx],":",uniqVar$Start_Position[var.idx],":",uniqVar$Reference_Allele[var.idx],":",uniqVar$Tumor_Seq_Allele2[var.idx],")")
+# label HUGO + HGSVp + genomic
+var.labels = paste0(uniqVar$Hugo_Symbol[var.idx]," ",uniqVar$HGVSp_Short[var.idx])
+colnames(d) = var.labels
 
-# get detection rate aggregated to gene level as data.frame with filters applied
+# column order
+m = apply(d,2,function(x) {c(min(x,na.rm=TRUE),mean(is.na(x)))})
+gOrd = order(-m[2,],m[1,],decreasing=TRUE)
+# row order
+n = data.frame(withHits=as.numeric(rowSums((d>0)&!is.na(d))))
+n$hitRate = n$withHits/rowSums(!is.na(d))
+sOrd = order(n$withHits,decreasing=TRUE)
+# heatmap annotations
+h.r = rowAnnotation(siteHitCount=row_anno_barplot(as.numeric(n$withHits[sOrd]),axis=TRUE,axis_side="top",border=FALSE,baseline=0),width=unit(4,"cm"))
+h.c = columnAnnotation(minDetectRate=column_anno_barplot(colSums(d[,gOrd],na.rm=TRUE)/colSums(!is.na(d[,gOrd])),axis=TRUE,border=FALSE,baseline=0),height=unit(4,"cm"))
+# heatmap
+h.m = Heatmap(d[sOrd,gOrd],col=colorRamp2(c(0,.000000000001,.2),c("grey95","lightblue1","red")),na_col="grey50",top_annotation=h.c,row_names_side="left",column_names_side="bottom",cluster_rows=FALSE,cluster_columns=FALSE,heatmap_legend_param=list(title="Detect Rate",color_bar="continuous",legend_direction="vertical",title_gp=gpar(fontsize=12),title_position="leftcenter"),column_title="Gene",column_title_side="bottom",row_names_max_width=unit(4,"cm"),column_names_max_height=unit(8,"cm"),row_names_gp=gpar(fontsize=10),column_names_gp=gpar(fontsize=10))
+#draw
+draw(h.m+h.r,heatmap_legend_side="left")
+  
+# get detection rate aggregated to GENE level as data.frame with filters applied
 d = as.data.frame(t(apply(a[j,k],1,function(x) {tapply(x,as.character(uniqVar$Hugo_Symbol[k]),sum)})/apply(a[j,k]+b[j,k],1,function(x) {tapply(x,as.character(uniqVar$Hugo_Symbol[k]),max)})))
-# filter to detect rate of at least 1% in at least 1 site
-d = d[,which(colSums(d>=.01)>=1)]
-l = colnames(d)
-d$Center = rownames(d)
-# reshape to long format for geom_tile of ggplot
-d = reshape(d,direction="long",idvar="Center",varying=l,v.names="test",times=l)
-colnames(d) = c("Center","Gene","Detect.Rate")
-# sort genes by coverage across site and detection rate -- this is done ultimately by sorting the levels of the factor
-l = aggregate(Detect.Rate ~ Gene,d,function(x) {c(min(x,na.rm=TRUE),mean(is.na(x)))},na.action=NULL)
-l = l[order(-l$Detect.Rate[,2],l$Detect.Rate[,1],decreasing=TRUE),]
-d$Gene = factor(d$Gene,levels=l$Gene)
-# sort sites by number of genes with calls made -- this is done ultimately by sorting the levels of the factor
-l = aggregate(Detect.Rate ~ Center,d,function(x) {mean((x>0)&(!is.na(x)))},na.action=NULL)
-l = l[order(l$Detect.Rate,decreasing=FALSE),]
-d$Center = factor(d$Center,levels=l$Center)
-# plot
-ggplot(d, aes(Gene,Center)) + geom_tile(aes(fill=Detect.Rate),colour="white") + scale_fill_gradientn(colours=c("grey95","lightblue1","red"),values=c(0,0.000000000001,1),na.value="grey50") + labs(x ="",y="") + theme(axis.text.x=element_text(angle=45,hjust=0,vjust=0.5,size=8),axis.text.y=element_text(size=8)) + scale_x_discrete(expand=c(0, 0),position="top") + scale_y_discrete(expand=c(0, 0))
+# GENE FILTER - detected in at least X % for at least 2 site
+d = d[,which(colSums(((d>=0.05)&!is.na(d)))>=2)]
+
+# column order
+m = apply(d,2,function(x) {c(min(x,na.rm=TRUE),mean(is.na(x)))})
+gOrd = order(-m[2,],m[1,],decreasing=TRUE)
+# row order
+n = data.frame(withHits=as.numeric(rowSums((d>0)&!is.na(d))))
+n$hitRate = n$withHits/rowSums(!is.na(d))
+sOrd = order(n$withHits,decreasing=TRUE)
+# heatmap annotations
+h.r = rowAnnotation(siteHitCount=row_anno_barplot(as.numeric(n$withHits[sOrd]),axis=TRUE,axis_side="top",border=FALSE,baseline=0),width=unit(4,"cm"))
+h.c = columnAnnotation(minDetectRate=column_anno_barplot(colSums(d[,gOrd],na.rm=TRUE)/colSums(!is.na(d[,gOrd])),axis=TRUE,border=FALSE,baseline=0),height=unit(4,"cm"))
+# heatmap
+h.m = Heatmap(d[sOrd,gOrd],col=colorRamp2(c(0,.000000000001,.2),c("grey95","lightblue1","red")),na_col="grey50",top_annotation=h.c,row_names_side="left",column_names_side="bottom",cluster_rows=FALSE,cluster_columns=FALSE,heatmap_legend_param=list(title="Detect Rate",color_bar="continuous",legend_direction="vertical",title_gp=gpar(fontsize=12),title_position="leftcenter"),column_title="Gene",column_title_side="bottom",row_names_max_width=unit(4,"cm"),column_names_max_height=unit(8,"cm"),row_names_gp=gpar(fontsize=10),column_names_gp=gpar(fontsize=10))
+#draw
+draw(h.m+h.r,heatmap_legend_side="left")
