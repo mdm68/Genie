@@ -1,6 +1,8 @@
 # libraries
 library(synapseClient)
 library(VariantAnnotation)
+library(ComplexHeatmap)
+library(circlize)
 
 # SAGE login
 synapseLogin(username=,password=) # you could do this with prompt or coded, but will need to enter something here
