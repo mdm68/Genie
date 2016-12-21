@@ -347,7 +347,7 @@ def validateCNV(filePath):
     cnvDF.columns = [col.upper() for col in cnvDF.columns]
 
     if cnvDF.columns[0] != "HUGO_SYMBOL":
-        total_error = total_error + "Your cnv file's first column must be Hugo_Symbol\n"
+        total_error = total_error + "Your cnv file's first column must be Hugo_symbol\n"
     
     cnvDF.drop(cnvDF.columns[[0]], axis=1, inplace=True)
     if cnvDF.get("ENTREZ_GENE_ID") is not None:
@@ -382,7 +382,7 @@ def validateFusion(filePath):
     
     return(total_error, warning)
 
-#Validate SEG files
+#Validate SEG/CBS files
 def validateSEG(filePath):
     """
     This function validates the SEG file to make sure it adhere to the genomic SOP.
@@ -397,7 +397,7 @@ def validateSEG(filePath):
     segDF = pd.read_csv(filePath,sep="\t",comment="#")
     segDF.columns = [col.upper() for col in segDF.columns]
 
-    REQUIRED_HEADERS = ['ID','CHROMOSOME','LOC.START','LOC.END','NUM.MARK','SEG.MEAN']
+    REQUIRED_HEADERS = ['ID','CHROM','LOC.START','LOC.END','NUM.MARK','SEG.MEAN']
     
     if not all(segDF.columns.isin(REQUIRED_HEADERS)):
         total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
