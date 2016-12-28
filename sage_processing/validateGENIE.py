@@ -487,7 +487,7 @@ if __name__ == "__main__":
                         help='File type that you are validating: maf, clinical, fusion, cnv, vcf, seg')
     parser.add_argument("file", type=str, nargs="+",
                         help='File(s) that you are validating.  If you validation your clinical files and you have both sample and patient files, you must provide both')
-    parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHH','MDA','VICC','UHN'],
+    parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHU','MDA','VICC','UHN'],
                         help='Contributing Center')
     args = parser.parse_args()
 
