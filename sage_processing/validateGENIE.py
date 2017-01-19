@@ -7,6 +7,13 @@ import os
 import argparse
 import getpass
 import string
+import httplib2 as http
+import json
+
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
 
 #DEPENDENCIES
 #PANDAS
@@ -82,6 +89,48 @@ def getGenieMapping(syn, synId):
     table = table_ent.asDataFrame()
     table = table.fillna("")
     return(table)
+
+#Validate genes
+def hgncRestCall(path):
+    headers = {'Accept': 'application/json',}
+
+    uri = 'http://rest.genenames.org'
+
+    target = urlparse(uri+path)
+    method = 'GET'
+    body = ''
+    h = http.Http()
+    response, content = h.request(target.geturl(),
+                                  method,
+                                  body,
+                                  headers)
+    if response['status'] == '200':
+        data = json.loads(content)
+        if len(data['response']['docs']) == 0:
+            return(False, None)
+        else:
+            return(True, data['response']['docs'][0]['symbol'])
+    else:
+        #return(False, response['status'])
+        return(False, None)
+
+# Validation of gene names
+def validateSymbol(gene):
+    #if gene name is "MLL2" OR "MLL4" AND "chrom is 12", then the HUGO symbol is KMT2D
+    #if gene name is "MLL2" OR "MLL4" AND "chrom is 19", then the HUGO symbol is KMT2B
+    path = '/fetch/symbol/%s' %  gene
+    verified, symbol = hgncRestCall(path)
+    if not verified:
+        path = '/fetch/prev_symbol/%s' %  gene
+        verified, symbol = hgncRestCall(path)
+    if not verified:
+        path = '/fetch/alias_symbol/%s' %  gene
+        verified, symbol = hgncRestCall(path)       
+    if gene == symbol:
+        return(True)
+    else:
+        print("%s should be %s" % (gene, symbol))
+        return({gene:symbol})
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
     """
@@ -359,6 +408,8 @@ def validateCNV(filePath):
     if not all(cnvDF.applymap(lambda x: isinstance(x, float))):
         total_error = total_error + "All values must be numerical values\n"
 
+    print("VALIDATING GENE SYMBOLS")
+    cnv['']
     return(total_error, warning)
 
 def validateFusion(filePath):
