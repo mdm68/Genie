@@ -419,6 +419,8 @@ def validateCNV(filePath):
         print("VALIDATING GENE SYMBOLS")
         #invalidated_genes = symbols.drop_duplicates().apply(validateSymbol)
         invalidated_genes = pool.map(validateSymbol, symbols)
+        if not all(invalidated_genes):
+            total_error += "Please update any gene names that need to or can't be remapped"
     return(total_error, warning)
 
 def validateFusion(filePath):
@@ -485,7 +487,7 @@ def validateFileName(args):
                          'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
                          'vcf':"GENIE-%s-",
                          'cnv':"data_CNA_%s.txt",
-                         'fusion':"data_fusions_%s.txt",
+                         'fusions':"data_fusions_%s.txt",
                          'seg':"genie_data_cna_hg19_%s.seg",
                          'bed':"%s-"}
 
@@ -518,7 +520,7 @@ def perform_main(args):
                 'clinical':validateClinical,
                 'vcf':validateVCF,
                 'cnv':validateCNV,
-                'fusion':validateFusion,
+                'fusions':validateFusion,
                 'seg':validateSEG,
                 'bed':validateBED}
     syn = synapse_login()
@@ -563,8 +565,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Validate GENIE files')
 
-    parser.add_argument("fileType", type=str, choices = ['maf','clinical','fusion','cnv','vcf','seg','bed'],
-                        help='File type that you are validating: maf, clinical, fusion, cnv, vcf, seg, bed')
+    parser.add_argument("fileType", type=str, choices = ['maf','clinical','fusions','cnv','vcf','seg','bed'],
+                        help='File type that you are validating: maf, clinical, fusions, cnv, vcf, seg, bed')
     parser.add_argument("file", type=str, nargs="+",
                         help='File(s) that you are validating.  If you validation your clinical files and you have both sample and patient files, you must provide both')
     parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHU','MDA','VICC','UHN'],
