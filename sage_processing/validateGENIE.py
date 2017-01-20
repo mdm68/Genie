@@ -471,15 +471,35 @@ def validateSEG(filePath):
 
     return(total_error, warning)
 
+#Validate BED files
 def validateBED(filePath):
     total_error = ""
     warning = ""
 
-    bed = pd.read_csv(filePath, sep="\t",comment="#")
-    
+    try:
+        bed = pd.read_csv(filePath, sep="\t",header=None)
+    except:
+        raise ValueError("Can't read in your bed file. Please make sure the BED file is not binary or contains a comment/header line")
+    if len(bed.columns) < 4:
+        total_error += "Your BED file must at least have four columns: chrom, start, stop, symbol\n"
+    newCols = ['chrom','start','stop','symbol']
+    newCols.extend(range(0,len(bed.columns) - 4))
+    bed.columns = newCols
 
-    print("VALIDATING GENE SYMBOLS")   
-    invalidated_genes = bed["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+    if not all(bed['start'].apply(lambda x: isinstance(x, int))):
+        total_error += "The start column must only be integers. Make sure there are no headers in your BED file.\n"
+
+    if not all(bed['stop'].apply(lambda x: isinstance(x, int))):
+        total_error += "The stop column must only be integers. Make sure there are no headers in your BED file.\n"
+
+    print("VALIDATING GENE SYMBOLS")
+    bed["symbol"] = [hugo.split(";")[0] for hugo in bed["symbol"]]
+    invalidated_genes = pool.map(validateSymbol, bed["symbol"].drop_duplicates())
+    if not all(invalidated_genes):
+        total_error += "Please update any gene names that need to or can't be remapped\n"
+    
+    return(total_error, warning)
+
 
 
 def validateFileName(args):
@@ -549,9 +569,9 @@ def perform_main(args):
         total_error, warning = validate_func(args.file[0])
     
     #Complete error message
-    message = "Below are some of the issues with your file:\n"
+    message = "----------------ERRORS----------------\n"
     if total_error == "":
-        message = "There is nothing wrong with the contents of your file!\n"
+        message = "YOUR FILE IS VALIDATED!\n"
     else:
         message += total_error
     if warning != "":
