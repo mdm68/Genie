@@ -15,6 +15,9 @@ try:
 except ImportError:
     from urllib.parse import urlparse
 
+from multiprocessing.dummy import Pool as ThreadPool 
+
+pool = ThreadPool(4)
 #DEPENDENCIES
 #PANDAS
 def synapse_login():
@@ -31,21 +34,17 @@ def synapse_login():
         syn = synapseclient.login(email=Username, password=Password,rememberMe=True)
     return(syn)
 
-#VALIDATING CLINICAL
-def checkColExist(clinicalDF, key):
+def checkColExist(DF, key):
     """
-    This function checks if the key exists as a header in the clinical dataframe
+    This function checks if the key exists as a header in a dataframe
     
-    :params clinicalDF:     Pandas clinical dataframe 
+    :params DF:             Pandas dataframe
     :params key:            Expected header column name
 
     :returns:               An error message or an empty string
     """
-    if clinicalDF.get(key) is None:
-        error = "<p>clinical file must have %s column</p>" % key
-    else:
-        error = ""
-    return(error)
+    result = False if DF.get(key) is None else True
+    return(result)
 
 #CHECKS IF THE MAPPING IS CORRECT
 def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False, fileType = "Patient"):
@@ -65,8 +64,8 @@ def checkMapping(clinicalDF, primaryName, secondaryName, mapping, required=False
         race = primaryName
     else:
         race = secondaryName
-    checkCol = checkColExist(clinicalDF, race)
-    if checkCol != "":
+    haveColumn = checkColExist(clinicalDF, race)
+    if not haveColumn:
         if required:
             error = "%s: clinical file must have %s column.\n" % (fileType,primaryName)
         else:
@@ -130,10 +129,12 @@ def validateSymbol(gene):
         return(True)
     else:
         if symbol is None:
-            print("%s cannot be mapped" % gene)
+            print("%s cannot be remapped" % gene)
         else:
-            print("%s is remapped to %s" % (gene, symbol))
-        return({gene:symbol})
+            if gene == "MLL4":
+                symbol = "KMT2B"
+            print("%s should be remapped to %s" % (gene, symbol))
+        return(False)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
     """
@@ -161,118 +162,116 @@ def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnic
         sampleId = 'SAMPLE_ID'
     else:
         sampleId = 'GENIE_SAMPLE_ID'
-    error = checkColExist(clinicalSampleDF, sampleId)
-    if error != "":
-        total_error = total_error + "Sample: clinical file must have SAMPLE_ID column.\n"
+    haveColumn = checkColExist(clinicalSampleDF, sampleId)
+    if not haveColumn:
+        total_error += "Sample: clinical file must have SAMPLE_ID column.\n"
     else:
         if sum(clinicalSampleDF[sampleId].isnull()) > 0:
-            total_error = total_error + "Sample: There can't be any blank values for PATIENT_ID\n"
+            total_error += "Sample: There can't be any blank values for PATIENT_ID\n"
 
     #CHECK: AGE_AT_SEQ_REPORT
     if clinicalSampleDF.get("AGE_AT_SEQ_REPORT") is not None:
         age = "AGE_AT_SEQ_REPORT"
     else:
         age = "AGE_SEQ_REPORT_DAYS"
-    error = checkColExist(clinicalSampleDF, age)
-    if error == "":
+    haveColumn = checkColExist(clinicalSampleDF, age)
+    if haveColumn:
         #Deal with HIPAA converted rows from DFCI
         #First for loop can't int(text) because there are instances that have <3435 
         clinicalSampleDF[age] = [text.replace(">","") if isinstance(text, str) else text for text in clinicalSampleDF[age]]
         clinicalSampleDF[age] = [int(text.replace("<","")) if isinstance(text, str) and text != "" else text for text in clinicalSampleDF[age]]
         if not all([isinstance(i, (int,float)) or i == "" for i in clinicalSampleDF[age]]) or pd.np.median(clinicalSampleDF[age]) < 100:
-            total_error = total_error + "Sample: Please double check your AGE_AT_SEQ_REPORT.  This is the interval in DAYS (integer) between the patient's date of birth and the date of the sequencing report that is associated with the sample.\n"
+            total_error += "Sample: Please double check your AGE_AT_SEQ_REPORT.  This is the interval in DAYS (integer) between the patient's date of birth and the date of the sequencing report that is associated with the sample.\n"
     else:
-        total_error = total_error + "Sample: clinical file must have AGE_AT_SEQ_REPORT column.\n"
+        total_error += "Sample: clinical file must have AGE_AT_SEQ_REPORT column.\n"
 
     #CHECK: ONCOTREE_CODE
-    error = checkColExist(clinicalSampleDF, "ONCOTREE_CODE")
-    if error == "":
+    haveColumn = checkColExist(clinicalSampleDF, "ONCOTREE_CODE")
+    if haveColumn:
         if not all(clinicalSampleDF['ONCOTREE_CODE'].isin(oncotree_mapping['ONCOTREE_CODE'])):
             unmapped_oncotrees = clinicalSampleDF['ONCOTREE_CODE'][~clinicalSampleDF['ONCOTREE_CODE'].isin(oncotree_mapping['ONCOTREE_CODE'])]
-            total_error = total_error + "Sample: Please double check that all your ONCOTREE CODES exist in the mapping. You have %d samples that don't map. These are the codes that don't map: %s\n" % (len(unmapped_oncotrees),",".join(set(unmapped_oncotrees)))
+            total_error += "Sample: Please double check that all your ONCOTREE CODES exist in the mapping. You have %d samples that don't map. These are the codes that don't map: %s\n" % (len(unmapped_oncotrees),",".join(set(unmapped_oncotrees)))
     else:
-        total_error = total_error + "Sample: clinical file must have ONCOTREE_CODE column.\n"
+        total_error += "Sample: clinical file must have ONCOTREE_CODE column.\n"
     
     #CHECK: SAMPLE_TYPE
-    error = checkColExist(clinicalSampleDF, "SAMPLE_TYPE")
-    if error == "":
-
+    haveColumn = checkColExist(clinicalSampleDF, "SAMPLE_TYPE")
+    if haveColumn:
         if not all(clinicalSampleDF['SAMPLE_TYPE'].isin(sampleType_mapping['CODE'])):
-        #if not all([isinstance(i, (int,float)) or i in [1,2,3,4,5,6,7] for i in clinicalSampleDF['SAMPLE_TYPE']]):
-            total_error = total_error+"Sample: Please double check your SAMPLE_TYPE column. This column must be %s.\n" % ", ".join(map(str,sampleType_mapping['CODE']))
+            total_error += "Sample: Please double check your SAMPLE_TYPE column. This column must be %s.\n" % ", ".join(map(str,sampleType_mapping['CODE']))
     else:
-        total_error = total_error + "Sample: clinical file must have SAMPLE_TYPE column.\n"
+        total_error += "Sample: clinical file must have SAMPLE_TYPE column.\n"
 
     #CHECK: SEQ_ASSAY_ID
-    error = checkColExist(clinicalSampleDF, "SEQ_ASSAY_ID")
-    if error == "":
+    haveColumn = checkColExist(clinicalSampleDF, "SEQ_ASSAY_ID")
+    if haveColumn:
         if not all([i != "" for i in clinicalSampleDF['SEQ_ASSAY_ID']]):
-            warning = warning + "Sample: Please double check your SEQ_ASSAY_ID columns, there are empty rows.\n"
+            warning += "Sample: Please double check your SEQ_ASSAY_ID columns, there are empty rows.\n"
     else:
-        total_error = total_error + "Sample: clinical file must have SEQ_ASSAY_ID column.\n"
+        total_error += "Sample: clinical file must have SEQ_ASSAY_ID column.\n"
 
     #CHECK: BIRTH_YEAR
     if clinicalDF.get("BIRTH_YEAR") is not None:
         birth_year = "BIRTH_YEAR"
     else:
         birth_year = "PATIENT_BIRTH_YEAR"
-    error = checkColExist(clinicalDF, birth_year)
-    if error == "": 
+    haveColumn = checkColExist(clinicalDF, birth_year)
+    if haveColumn: 
         #Deal with HIPAA converted rows from DFCI
         #First for loop can't int(text) because there are instances that have <3435 
         clinicalDF[birth_year] = [text.replace(">","") if isinstance(text, str) else text for text in clinicalDF[birth_year]]
         clinicalDF[birth_year] = [int(text.replace("<","")) if isinstance(text, str) and text != "" else text for text in clinicalDF[birth_year]]
         if not all([isinstance(i, (int,float)) or i == "" for i in clinicalDF[birth_year]]):
-            total_error = total_error + "Patient: Please double check your BIRTH_YEAR column.  This column must be integers or blank.\n"
+            total_error += "Patient: Please double check your BIRTH_YEAR column.  This column must be integers or blank.\n"
     else:
-        total_error = total_error + "Patient: clinical file must have BIRTH_YEAR column.\n"
+        total_error += "Patient: clinical file must have BIRTH_YEAR column.\n"
+
 
     #CHECK: PATIENT_ID
     if clinicalDF.get("PATIENT_ID") is not None:
         patientId = "PATIENT_ID"
     else:
         patientId = "GENIE_PATIENT_ID"
-    error = checkColExist(clinicalDF, patientId)
-    if error != "":
-        total_error = total_error + "Patient: clinical file must have PATIENT_ID column.\n"
+    haveColumn = checkColExist(clinicalDF, patientId)
+    if not haveColumn:
+        total_error += "Patient: clinical file must have PATIENT_ID column.\n"
     else:
         if sum(clinicalDF[patientId].isnull()) > 0:
-            total_error = total_error + "Patient: There can't be any blank values for PATIENT_ID\n"
-
-    # Create patient Id in sample data
-    if clinicalSampleDF.get(patientId) is None:
-        clinicalSampleDF[patientId] = ["-".join(samp.split("-")[0:3]) for samp in clinicalSampleDF[sampleId]]
-    #CHECK: All samples must have associated patient data 
-    if not all(clinicalSampleDF[patientId].isin(clinicalDF[patientId])):
-        total_error = total_error + "Sample: All samples must have associated patient information\n"
-    #CHECK: All patients must have associated sample data 
-    if not all(clinicalDF[patientId].isin(clinicalSampleDF[patientId])):
-        total_error = total_error + "Sample: All patients must have associated sample information\n"
+            total_error += "Patient: There can't be any blank values for PATIENT_ID\n"
+        # Create patient Id in sample data
+        if clinicalSampleDF.get(patientId) is None:
+            clinicalSampleDF[patientId] = ["-".join(samp.split("-")[0:3]) for samp in clinicalSampleDF[sampleId]]
+        #CHECK: All samples must have associated patient data 
+        if not all(clinicalSampleDF[patientId].isin(clinicalDF[patientId])):
+            total_error += "Sample: All samples must have associated patient information\n"
+        #CHECK: All patients must have associated sample data 
+        if not all(clinicalDF[patientId].isin(clinicalSampleDF[patientId])):
+            total_error += "Sample: All patients must have associated sample information\n"
 
     #CHECK: PRIMARY_RACE
     warn, error = checkMapping(clinicalDF,"PRIMARY_RACE","NAACCR_RACE_CODE_PRIMARY",race_mapping['CODE'])
-    warning = warning + warn
-    total_error  = total_error + error 
+    warning += warn
+    total_error  += error 
 
     #CHECK: SECONDARY_RACE
     warn, error = checkMapping(clinicalDF,"SECONDARY_RACE","NAACCR_RACE_CODE_SECONDARY",race_mapping['CODE'])
-    warning = warning + warn
-    total_error  = total_error + error 
+    warning += warn
+    total_error  += error 
 
     #CHECK: TERTIARY_RACE
     warn, error = checkMapping(clinicalDF,"TERTIARY_RACE","NAACCR_RACE_CODE_TERTIARY",race_mapping['CODE'])
-    warning = warning + warn
-    total_error  = total_error + error 
+    warning += warn
+    total_error  += error 
 
     #CHECK: SEX
     warn, error = checkMapping(clinicalDF,"SEX","NAACCR_SEX_CODE",sex_mapping['CODE'], required=True)
-    warning = warning + warn
-    total_error  = total_error + error 
+    warning += warn
+    total_error  += error 
 
     #CHECK: ETHNICITY
     warn, error = checkMapping(clinicalDF,"ETHNICITY","NAACCR_ETHNICITY_CODE",ethnicity_mapping['CODE'])
-    warning = warning + warn
-    total_error  = total_error + error
+    warning += warn
+    total_error  += error
 
     return(total_error, warning)
 
@@ -301,33 +300,35 @@ def validateMAF(filePath):
     
     #CHECK: First column must be in the first_header list
     if mutationDF.columns[0] not in first_header:
-        total_error = total_error+"First column header must be one of these: %s.\n" % ", ".join(first_header)
+        total_error += "First column header must be one of these: %s.\n" % ", ".join(first_header)
     
     #CHECK: Everything in correct_column_headers must be in mutation file
-    if not all([i in mutationDF.columns for i in correct_column_headers]):
-        total_error = total_error + "Your mutation file must at least have these headers: %s. If you are missing T_DEPTH, you must have T_REF_COUNT!\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
+    if not all([checkColExist(mutationDF, i) for i in correct_column_headers]):
+        total_error += "Your mutation file must at least have these headers: %s. If you are missing T_DEPTH, you must have T_REF_COUNT!\n" % ",".join([i for i in correct_column_headers if i not in mutationDF.columns.values])
     
     #CHECK: Must have either Tumor_Seq_Allele1 or 2
     tumor_cols = [i for i in tumors if i in mutationDF.columns.values]
     if len(tumor_cols) == 0:
-        total_error = total_error + "Your mutation file must at least have one of these headers: %s." % ",".join(tumors)
+        total_error += "Your mutation file must also have at least one of these headers: %s.\n" % " or ".join(tumors)
 
     for i in tumor_cols:
         if sum(mutationDF[i] == "NA") > 0:
-            warning = warning + "Your %s column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n" % i
-
-    if sum(mutationDF['REFERENCE_ALLELE'] == "NA") > 0:
-        warning = warning + "Your REFERENCE_ALLELE column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n"
+            warning += "Your %s column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n" % i
 
     #CHECK: Mutation file would benefit from columns in optional_headers
-    if not all([i in mutationDF.columns for i in optional_headers]):
-        warning = warning + "Your mutation file does not have the column headers that can give extra information to the processed mutation file: %s.\n" % ", ".join([i for i in optional_headers if i not in mutationDF.columns.values ])      
+    if not all([checkColExist(mutationDF, i) for i in optional_headers]):
+        warning += "Your mutation file does not have the column headers that can give extra information to the processed mutation file: %s.\n" % ", ".join([i for i in optional_headers if i not in mutationDF.columns.values ])      
     
-    #CHECK: mutation file must not have empty reference or variant alleles
-    if sum(mutationDF['REFERENCE_ALLELE'].isnull()) > 0:
-        total_error = total_error + "Your mutation file cannot have any empty REFERENCE_ALLELE values.\n"
-    if sum(mutationDF['TUMOR_SEQ_ALLELE2'].isnull()) >0:
-        total_error = total_error + "Your mutation file cannot have any empty TUMOR_SEQ_ALLELE2 values.\n"
+    if checkColExist(mutationDF, "REFERENCE_ALLELE"):
+        if sum(mutationDF['REFERENCE_ALLELE'] == "NA") > 0:
+            warning += "Your REFERENCE_ALLELE column contains NA values, which cannot be placeholders for blank values.  Please put in empty strings for blank values.\n"
+        #CHECK: mutation file must not have empty reference or variant alleles
+        if sum(mutationDF['REFERENCE_ALLELE'].isnull()) > 0:
+            total_error += "Your mutation file cannot have any empty REFERENCE_ALLELE values.\n"
+    
+    if checkColExist(mutationDF, "TUMOR_SEQ_ALLELE2"):
+        if sum(mutationDF['TUMOR_SEQ_ALLELE2'].isnull()) >0:
+            total_error += "Your mutation file cannot have any empty TUMOR_SEQ_ALLELE2 values.\n"
 
     return(total_error, warning)
 
@@ -362,24 +363,24 @@ def validateVCF(filePath):
         raise ValueError("Your vcf must start with the header #CHROM")
     
     if sum(vcf.columns.isin(REQUIRED_HEADERS)) != 8:
-        total_error = total_error + "Your vcf file must have these headers: CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO.\n"
+        total_error += "Your vcf file must have these headers: CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO.\n"
 
     if len(vcf.columns) > 8:
         if "FORMAT" not in vcf.columns:
-            total_error = total_error + "Your vcf file must have FORMAT header if genotype columns exist.\n"
+            total_error += "Your vcf file must have FORMAT header if genotype columns exist.\n"
    
     #Require that they report variants mapped to either GRCh37 or hg19 without 
     #the chr-prefix. variants on chrM are not supported
     nochr = ["chr" in i for i in vcf['#CHROM'] if isinstance(i, str)]
     if sum(nochr) > 0:
-        warning = warning + "Your vcf file must not have the chr prefix in front of chromosomes.\n"
+        warning += "Your vcf file should not have the chr prefix in front of chromosomes.\n"
     if sum(vcf['#CHROM'].isin(["chrM"])) > 0:
-        total_error = total_error + "Your vcf file must not have variants on chrM.\n"
+        total_error += "Your vcf file must not have variants on chrM.\n"
 
     #No white spaces
     temp = vcf.apply(lambda x: contains_whitespace(x), axis=1)
     if sum(temp) >0:
-        warning = warning + "Your vcf file must not have any white spaces in any of the columns.\n"
+        warning += "Your vcf file should not have any white spaces in any of the columns.\n"
     #I can also recommend a `bcftools query` command that will parse a VCF in a detailed way, 
     #and output with warnings or errors if the format is not adhered too
     return(total_error, warning)
@@ -399,21 +400,25 @@ def validateCNV(filePath):
     cnvDF.columns = [col.upper() for col in cnvDF.columns]
 
     if cnvDF.columns[0] != "HUGO_SYMBOL":
-        total_error = total_error + "Your cnv file's first column must be Hugo_symbol\n"
-    
-    cnvDF.drop(cnvDF.columns[[0]], axis=1, inplace=True)
-    if cnvDF.get("ENTREZ_GENE_ID") is not None:
-        del cnvDF['ENTREZ_GENE_ID']
+        total_error += "Your cnv file's first column must be Hugo_symbol\n"
+    haveColumn = checkColExist(cnvDF, "HUGO_SYMBOL")
+    if haveColumn:
+        symbols = cnvDF["HUGO_SYMBOL"].drop_duplicates()
 
     if not all(~cnvDF.isnull()):
-        total_error = total_error + "Your cnv file must not have any empty values\n"
-    
+        total_error += "Your cnv file must not have any empty values\n"
+
+    cnvDF.drop(cnvDF.columns[[0]], axis=1, inplace=True)
+    if checkColExist(cnvDF, "ENTREZ_GENE_ID"):
+        del cnvDF['ENTREZ_GENE_ID']
+
     if not all(cnvDF.applymap(lambda x: isinstance(x, float))):
-        total_error = total_error + "All values must be numerical values\n"
+        total_error += "All values must be numerical values\n"
 
-    print("VALIDATING GENE SYMBOLS")
-    invalidated_genes = cnv["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
-
+    if haveColumn:
+        print("VALIDATING GENE SYMBOLS")
+        #invalidated_genes = symbols.drop_duplicates().apply(validateSymbol)
+        invalidated_genes = pool.map(validateSymbol, symbols)
     return(total_error, warning)
 
 def validateFusion(filePath):
@@ -432,11 +437,14 @@ def validateFusion(filePath):
 
     REQUIRED_HEADERS = ['HUGO_SYMBOL','ENTREZ_GENE_ID','CENTER','TUMOR_SAMPLE_BARCODE','FUSION','DNA_SUPPORT','RNA_SUPPORT','METHOD','FRAME']
 
-    if not all([i in fusionDF.columns for i in REQUIRED_HEADERS]):
-        total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
-    print("VALIDATING GENE SYMBOLS")
-    invalidated_genes = fusionDF["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
-
+    if not all([checkColExist(fusionDF, i) for i in REQUIRED_HEADERS]):
+        total_error += "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
+    if checkColExist(fusionDF, "HUGO_SYMBOL"):
+        print("VALIDATING GENE SYMBOLS")
+        #invalidated_genes = fusionDF["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+        invalidated_genes = pool.map(validateSymbol, fusionDF["HUGO_SYMBOL"].drop_duplicates())
+        if not all(invalidated_genes):
+            total_error += "Please update any gene names that need to or can't be remapped"
     return(total_error, warning)
 
 #Validate SEG/CBS files
@@ -457,9 +465,7 @@ def validateSEG(filePath):
     REQUIRED_HEADERS = ['ID','CHROM','LOC.START','LOC.END','NUM.MARK','SEG.MEAN']
     
     if not all(segDF.columns.isin(REQUIRED_HEADERS)):
-        total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
-    print("VALIDATING GENE SYMBOLS")   
-    invalidated_genes = segDF["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+        total_error += "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
 
     return(total_error, warning)
 
@@ -480,7 +486,8 @@ def validateFileName(args):
                          'vcf':"GENIE-%s-",
                          'cnv':"data_CNA_%s.txt",
                          'fusion':"data_fusions_%s.txt",
-                         'seg':"genie_data_cna_hg19_%s.seg"}
+                         'seg':"genie_data_cna_hg19_%s.seg",
+                         'bed':"%s-"}
 
     assert all([os.path.isfile(filename) for filename in args.file]), "Files must exist on the drive"
     if args.fileType == "clinical":
@@ -494,7 +501,9 @@ def validateFileName(args):
     else:
         formatting = VALIDATE_FILENAME[args.fileType] % args.center
         if args.fileType == "vcf":
-            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId!" % args.center 
+            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId.vcf!" % args.center 
+        elif args.fileType == "bed":
+            assert os.path.basename(args.file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % args.center 
         else:
             assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s!" % (args.fileType, formatting)
 
@@ -542,9 +551,9 @@ def perform_main(args):
     if total_error == "":
         message = "There is nothing wrong with the contents of your file!\n"
     else:
-        message = message + total_error
+        message += total_error
     if warning != "":
-        message = message + "-------------WARNINGS-------------\n" + warning
+        message += "-------------WARNINGS-------------\n" + warning
 
     print(message)
     return(message)
