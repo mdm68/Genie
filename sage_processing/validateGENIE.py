@@ -129,7 +129,10 @@ def validateSymbol(gene):
     if gene == symbol:
         return(True)
     else:
-        print("%s should be %s" % (gene, symbol))
+        if symbol is None:
+            print("%s cannot be mapped" % gene)
+        else:
+            print("%s is remapped to %s" % (gene, symbol))
         return({gene:symbol})
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
@@ -409,7 +412,8 @@ def validateCNV(filePath):
         total_error = total_error + "All values must be numerical values\n"
 
     print("VALIDATING GENE SYMBOLS")
-    cnv['']
+    invalidated_genes = cnv["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+
     return(total_error, warning)
 
 def validateFusion(filePath):
@@ -430,7 +434,9 @@ def validateFusion(filePath):
 
     if not all([i in fusionDF.columns for i in REQUIRED_HEADERS]):
         total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
-    
+    print("VALIDATING GENE SYMBOLS")
+    invalidated_genes = fusionDF["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+
     return(total_error, warning)
 
 #Validate SEG/CBS files
@@ -452,8 +458,21 @@ def validateSEG(filePath):
     
     if not all(segDF.columns.isin(REQUIRED_HEADERS)):
         total_error = total_error + "Your fusion file must at least have these headers: %s.\n" % ",".join([i for i in REQUIRED_HEADERS if i not in mutationDF.columns.values])
+    print("VALIDATING GENE SYMBOLS")   
+    invalidated_genes = segDF["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
 
     return(total_error, warning)
+
+def validateBED(filePath):
+    total_error = ""
+    warning = ""
+
+    bed = pd.read_csv(filePath, sep="\t",comment="#")
+    
+
+    print("VALIDATING GENE SYMBOLS")   
+    invalidated_genes = bed["HUGO_SYMBOL"].drop_duplicates().apply(validateSymbol)
+
 
 def validateFileName(args):
     VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
@@ -491,7 +510,8 @@ def perform_main(args):
                 'vcf':validateVCF,
                 'cnv':validateCNV,
                 'fusion':validateFusion,
-                'seg':validateSEG}
+                'seg':validateSEG,
+                'bed':validateBED}
     syn = synapse_login()
     #CHECK: Fail if filename is incorrect
     try:
@@ -534,8 +554,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Validate GENIE files')
 
-    parser.add_argument("fileType", type=str, choices = ['maf','clinical','fusion','cnv','vcf','seg'],
-                        help='File type that you are validating: maf, clinical, fusion, cnv, vcf, seg')
+    parser.add_argument("fileType", type=str, choices = ['maf','clinical','fusion','cnv','vcf','seg','bed'],
+                        help='File type that you are validating: maf, clinical, fusion, cnv, vcf, seg, bed')
     parser.add_argument("file", type=str, nargs="+",
                         help='File(s) that you are validating.  If you validation your clinical files and you have both sample and patient files, you must provide both')
     parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHU','MDA','VICC','UHN'],
