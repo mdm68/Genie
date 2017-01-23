@@ -18,8 +18,7 @@ except ImportError:
 from multiprocessing.dummy import Pool as ThreadPool 
 
 pool = ThreadPool(4)
-#DEPENDENCIES
-#PANDAS
+
 def synapse_login():
     """
     This function logs into synapse for you if credentials are saved.  
