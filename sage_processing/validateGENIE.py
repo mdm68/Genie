@@ -525,8 +525,6 @@ def validateBED(filePath):
     
     return(total_error, warning)
 
-
-
 def validateFileName(args):
     """
     This performs validation of filenames
@@ -559,6 +557,7 @@ def validateFileName(args):
         else:
             assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s!" % (args.fileType, formatting)
     return(True)
+
 def perform_main(args):
     """
     This performs the validation of files
