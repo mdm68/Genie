@@ -95,6 +95,8 @@ def hgncRestCall(path):
     """
     This function does the rest call to the genenames website
 
+    :params path:     The gene symbol url path to add to the base uri
+
     :returns:         If the symbol exists, returns True and the corrected symbol, otherwise returns False and None.
     """
     headers = {'Accept': 'application/json',}
@@ -123,6 +125,8 @@ def hgncRestCall(path):
 def validateSymbol(gene):
     """
     This function does validation of symbols
+
+    :params gene:     Gene symbol
 
     :returns:         Check if the provided gene name is a correct symbol and print out genes 
                       that need to be remapped or can't be mapped to anything
