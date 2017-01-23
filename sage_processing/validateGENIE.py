@@ -23,6 +23,8 @@ def synapse_login():
     """
     This function logs into synapse for you if credentials are saved.  
     If not saved, then user is prompted username and password.
+
+    :returns:     Synapseclient object
     """
     try:
         syn = synapseclient.login()
@@ -90,6 +92,11 @@ def getGenieMapping(syn, synId):
 
 #Validate genes
 def hgncRestCall(path):
+    """
+    This function does the rest call to the genenames website
+
+    :returns:         If the symbol exists, returns True and the corrected symbol, otherwise returns False and None.
+    """
     headers = {'Accept': 'application/json',}
 
     uri = 'http://rest.genenames.org'
@@ -114,8 +121,12 @@ def hgncRestCall(path):
 
 # Validation of gene names
 def validateSymbol(gene):
-    #if gene name is "MLL2" OR "MLL4" AND "chrom is 12", then the HUGO symbol is KMT2D
-    #if gene name is "MLL2" OR "MLL4" AND "chrom is 19", then the HUGO symbol is KMT2B
+    """
+    This function does validation of symbols
+
+    :returns:         Check if the provided gene name is a correct symbol and print out genes 
+                      that need to be remapped or can't be mapped to anything
+    """
     path = '/fetch/symbol/%s' %  gene
     verified, symbol = hgncRestCall(path)
     if not verified:
@@ -130,6 +141,8 @@ def validateSymbol(gene):
         if symbol is None:
             print("%s cannot be remapped" % gene)
         else:
+            #if gene name is "MLL2" OR "MLL4" AND "chrom is 12", then the HUGO symbol is KMT2D
+            #if gene name is "MLL2" OR "MLL4" AND "chrom is 19", then the HUGO symbol is KMT2B
             if gene == "MLL4":
                 symbol = "KMT2B"
             print("%s should be remapped to %s" % (gene, symbol))
@@ -335,6 +348,8 @@ def validateMAF(filePath):
 def contains_whitespace(x):
     """
     Helper function for validateVCF.  No whitespace is allowed in VCF files
+
+    :returns:     Sum of the the amount of whitespace in a string
     """
     return(sum([" " in i for i in x if isinstance(i, str)]))
 
@@ -472,6 +487,13 @@ def validateSEG(filePath):
 
 #Validate BED files
 def validateBED(filePath):
+    """
+    This function validates the BED file to make sure it adhere to the genomic SOP.
+    
+    :params filePath:     Path to BED file
+
+    :returns:             Text with all the errors in the BED file
+    """
     total_error = ""
     warning = ""
 
@@ -502,6 +524,11 @@ def validateBED(filePath):
 
 
 def validateFileName(args):
+    """
+    This performs validation of filenames
+
+    :returns:  True if filenames are correct
+    """
     VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
                          'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
                          'vcf':"GENIE-%s-",
@@ -527,7 +554,7 @@ def validateFileName(args):
             assert os.path.basename(args.file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % args.center 
         else:
             assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s!" % (args.fileType, formatting)
-
+    return(True)
 def perform_main(args):
     """
     This performs the validation of files
