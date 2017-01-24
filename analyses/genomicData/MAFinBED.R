@@ -55,5 +55,5 @@ for (panelName in levels(genieClinData$SEQ_ASSAY_ID)) {
   panStats[panelName,"variants called out of BED"] = length(samples.idx[!genieMutData$inBED[samples.idx]])
   panStats[panelName,"unique variants called out of BED"] = length(unique(mafVR[samples.idx[!genieMutData$inBED[samples.idx]]]))
 }
-
+write.csv("data_mutation_extended.txt",)
 
