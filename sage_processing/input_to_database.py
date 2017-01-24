@@ -10,7 +10,7 @@ import shutil
 #from processing_functions import *
 import synapseutils as synu
 import validateGENIE as validate_genie
-import processing_functions
+#import processing_functions
 
 
 CENTERS_INPUT_SYNIDS = {"NKI":"syn5017764",

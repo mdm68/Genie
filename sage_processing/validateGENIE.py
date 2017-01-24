@@ -132,7 +132,9 @@ def hgncRestCall(path):
         if len(data['response']['docs']) == 0:
             return(False, None)
         else:
-            return(True, data['response']['docs'][0]['symbol'])
+            #print(len(data['response']['docs']))
+            mapped = [symbol['symbol'] for symbol in data['response']['docs']]
+            return(True, mapped)
     else:
         return(False, None)
 
@@ -154,16 +156,18 @@ def validateSymbol(gene):
     if not verified:
         path = '/fetch/alias_symbol/%s' %  gene
         verified, symbol = hgncRestCall(path)       
-    if gene == symbol:
+    if gene in symbol:
         return(True)
     else:
         if symbol is None:
-            print("%s cannot be remapped" % gene)
+            print("%s cannot be remapped. Please correct." % gene)
         else:
-            #if "MLL4", then the HUGO symbol should be KMT2D
-            if gene == "MLL4":
-                symbol = "KMT2D"
-            print("%s should be remapped to %s" % (gene, symbol))
+            #if "MLL4", then the HUGO symbol should be KMT2D and KMT2B
+            if len(symbol) > 1:
+                print("%s can be mapped to different symbols: %s. Please correct." % (gene, ", ".join(symbol)))
+            else:
+                print("%s will be remapped to %s" % (gene, symbol[0]))
+                return(True)
         return(False)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
