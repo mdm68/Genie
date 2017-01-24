@@ -118,7 +118,6 @@ def hgncRestCall(path):
         else:
             return(True, data['response']['docs'][0]['symbol'])
     else:
-        #return(False, response['status'])
         return(False, None)
 
 # Validation of gene names
@@ -145,10 +144,9 @@ def validateSymbol(gene):
         if symbol is None:
             print("%s cannot be remapped" % gene)
         else:
-            #if gene name is "MLL2" OR "MLL4" AND "chrom is 12", then the HUGO symbol is KMT2D
-            #if gene name is "MLL2" OR "MLL4" AND "chrom is 19", then the HUGO symbol is KMT2B
+            #if "MLL4", then the HUGO symbol should be KMT2D
             if gene == "MLL4":
-                symbol = "KMT2B"
+                symbol = "KMT2D"
             print("%s should be remapped to %s" % (gene, symbol))
         return(False)
 
@@ -161,6 +159,7 @@ def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnic
 
     :returns:                              Error message
     """
+    print("VALIDATING CLINICAL FILE")
     clinicalDF = pd.read_csv(clinicalFilePath,sep="\t",comment="#")
     clinicalDF.columns = [col.upper() for col in clinicalDF.columns]
     clinicalDF = clinicalDF.fillna("")
@@ -300,7 +299,7 @@ def validateMAF(filePath):
 
     :returns:             Text with all the errors in the clinical file
     """
-
+    print("VALIDATING MAF FILE")
     first_header = ['CHROMOSOME','HUGO_SYMBOL','TUMOR_SAMPLE_BARCODE']
     correct_column_headers = ['CHROMOSOME','START_POSITION','REFERENCE_ALLELE','TUMOR_SAMPLE_BARCODE','T_ALT_COUNT','T_DEPTH'] #T_REF_COUNT + T_ALT_COUNT = T_DEPTH
     optional_headers = ['T_REF_COUNT','N_DEPTH','N_REF_COUNT','N_ALT_COUNT']
@@ -365,7 +364,8 @@ def validateVCF(filePath):
     :params filePath:     Path to VCF file
 
     :returns:             Text with all the errors in the VCF file
-    """    
+    """  
+    print("VALIDATING VCF FILE")
     REQUIRED_HEADERS = ["#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO"]
     #FORMAT is optional
     total_error = ""
@@ -412,6 +412,7 @@ def validateCNV(filePath):
 
     :returns:             Text with all the errors in the CNV file
     """
+    print("VALIDATING CNV FILE")
     total_error = ""
     warning = ""
     cnvDF = pd.read_csv(filePath,sep="\t",comment="#")
@@ -449,6 +450,7 @@ def validateFusion(filePath):
 
     :returns:             Text with all the errors in the Fusion file
     """
+    print("VALIDATING FUSION FILE")
     total_error = ""
     warning = ""
 
@@ -476,6 +478,7 @@ def validateSEG(filePath):
 
     :returns:             Text with all the errors in the SEG file
     """
+    print("VALIDATING SEG FILE")
     total_error = ""
     warning = ""
 
@@ -498,6 +501,8 @@ def validateBED(filePath):
 
     :returns:             Text with all the errors in the BED file
     """
+    print("VALIDATING BED FILE")
+
     total_error = ""
     warning = ""
 
@@ -525,7 +530,7 @@ def validateBED(filePath):
     
     return(total_error, warning)
 
-def validateFileName(args):
+def validateFileName(fileType, file, center):
     """
     This performs validation of filenames
 
@@ -539,26 +544,27 @@ def validateFileName(args):
                          'seg':"genie_data_cna_hg19_%s.seg",
                          'bed':"%s-"}
 
-    assert all([os.path.isfile(filename) for filename in args.file]), "Files must exist on the drive"
-    if args.fileType == "clinical":
-        formatting = [i % args.center for i in VALIDATE_FILENAME[args.fileType]]
-        if len(args.file) > 1:
-            assert len(set(args.file)) > 1, "Must submit two different filenames!"
-            assert sum([os.path.basename(i) in formatting[1:3] for i in args.file]) == 2, "When submitting a patient and sample file, these must be named: %s!" % ", ".join(formatting[1:3]) 
+    assert all([os.path.isfile(filename) for filename in file]), "Files must exist on the drive"
+    if fileType == "clinical":
+        formatting = [i % center for i in VALIDATE_FILENAME[fileType]]
+        if len(file) > 1:
+            assert len(set(file)) > 1, "Must submit two different filenames!"
+            assert sum([os.path.basename(i) in formatting[1:3] for i in file]) == 2, "When submitting a patient and sample file, these must be named: %s!" % ", ".join(formatting[1:3]) 
         else:
-            assert "patient" not in args.file[0] and "sample" not in args.file[0], "If you submit a patient or sample file, you must submit both at the same time: eg. python validateGENIE.py clinical data_clinical_supp_patient_SAGE.txt data_clinical_supp_sample_SAGE.txt SAGE"
-            assert os.path.basename(args.file[0]) == formatting[0], "Clinical file must be named: %s!" % formatting[0]
+            assert "patient" not in file[0] and "sample" not in file[0], "If you submit a patient or sample file, you must submit both at the same time: eg. python validateGENIE.py clinical data_clinical_supp_patient_SAGE.txt data_clinical_supp_sample_SAGE.txt SAGE"
+            assert os.path.basename(file[0]) == formatting[0], "Clinical file must be named: %s!" % formatting[0]
     else:
-        formatting = VALIDATE_FILENAME[args.fileType] % args.center
-        if args.fileType == "vcf":
-            assert os.path.basename(args.file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId.vcf!" % args.center 
-        elif args.fileType == "bed":
-            assert os.path.basename(args.file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % args.center 
+        formatting = VALIDATE_FILENAME[fileType] % center
+        if fileType == "vcf":
+            assert os.path.basename(file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId.vcf!" % center 
+        elif fileType == "bed":
+            assert os.path.basename(file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % center 
         else:
-            assert os.path.basename(args.file[0]) == formatting, "%s filename must be: %s!" % (args.fileType, formatting)
+            assert os.path.basename(file[0]) == formatting, "%s filename must be: %s!" % (fileType, formatting)
     return(True)
 
-def perform_main(args):
+
+def main(fileType, file, center):
     """
     This performs the validation of files
 
@@ -575,47 +581,52 @@ def perform_main(args):
     syn = synapse_login()
     #CHECK: Fail if filename is incorrect
     try:
-        validateFileName(args)
+        validateFileName(fileType, file, center)
     except AssertionError as e:
         raise ValueError("Your filename is incorrect!\n%s\nPlease change your filename before you run the validator again."  % e)
     
-    validate_func = VALIDATE_MAPPING[args.fileType]
-    if args.fileType == "clinical":
+    validate_func = VALIDATE_MAPPING[fileType]
+    if fileType == "clinical":
         oncotree_mapping = getGenieMapping(syn, "syn7437073")
         sampleType_mapping = getGenieMapping(syn, "syn7434273")
         ethnicity_mapping = getGenieMapping(syn, "syn7434242")
         race_mapping = getGenieMapping(syn, "syn7434236")
         sex_mapping = getGenieMapping(syn, "syn7434222")
 
-        if len(args.file) > 1:
-            if "patient" in args.file[0].lower():
-                total_error, warning = validate_func(args.file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=args.file[1])
+        if len(file) > 1:
+            if "patient" in file[0].lower():
+                total_error, warning = validate_func(file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=file[1])
             else:
-                total_error, warning = validate_func(args.file[1],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=args.file[0])
+                total_error, warning = validate_func(file[1],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=file[0])
         else:
-            total_error, warning = validate_func(args.file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping)
+            total_error, warning = validate_func(file[0],oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping)
     else:
-        total_error, warning = validate_func(args.file[0])
+        total_error, warning = validate_func(file[0])
     
     #Complete error message
     message = "----------------ERRORS----------------\n"
     if total_error == "":
         message = "YOUR FILE IS VALIDATED!\n"
+        valid = True
     else:
         message += total_error
+        valid = False
     if warning != "":
         message += "-------------WARNINGS-------------\n" + warning
 
     print(message)
-    return(message)
+    return(message, valid)
 
+
+def perform_main(args):
+    message = main(args.fileType, args.file, args.center)
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Validate GENIE files')
 
     parser.add_argument("fileType", type=str, choices = ['maf','clinical','fusions','cnv','vcf','seg','bed'],
-                        help='File type that you are validating: maf, clinical, fusions, cnv, vcf, seg, bed')
+                        help='Filetypes that you are validating.')
     parser.add_argument("file", type=str, nargs="+",
                         help='File(s) that you are validating.  If you validation your clinical files and you have both sample and patient files, you must provide both')
     parser.add_argument("center", type=str, choices = ['MSK','GRCC','DFCI','NKI','JHU','MDA','VICC','UHN'],
