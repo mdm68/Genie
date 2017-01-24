@@ -19,6 +19,22 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 pool = ThreadPool(4)
 
+# Validates annotations on Synapse
+def validateAnnotations(fileList):
+    print("VALIDATING ANNOTATIONS")
+    notcorrect = []
+    for i,ID in enumerate(fileList['entity.id']):
+        foo = syn.get(ID, downloadFile=False)
+        required_annot = ["center","dataType","fileType","disease","consortium",
+        "platform","tissueSource","organism","dataSubType"]
+        check = [annot for annot in required_annot if foo.annotations.has_key(annot)]
+        if len(check) != len(required_annot):
+            notcorrect.append(fileList.iloc[i]['entity.id'])
+    if len(notcorrect) >0:
+        return(False)
+    else:
+        return(True)
+
 def synapse_login():
     """
     This function logs into synapse for you if credentials are saved.  
@@ -403,6 +419,7 @@ def validateVCF(filePath):
     #and output with warnings or errors if the format is not adhered too
     return(total_error, warning)
 
+
 #VALIDATING CNV
 def validateCNV(filePath):
     """
@@ -442,6 +459,7 @@ def validateCNV(filePath):
             total_error += "Please update any gene names that need to or can't be remapped"
     return(total_error, warning)
 
+#Validates fusion files
 def validateFusion(filePath):
     """
     This function validates the Fusion file to make sure it adhere to the genomic SOP.
