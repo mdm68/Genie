@@ -85,6 +85,9 @@ def updateDatabase(database, new_dataset, databaseSynId, checkBy):
 	newSet =  new_dataset[~new_dataset[checkBy].isin(database[checkBy])]
 	#All deleted rows (This assumes that all data that don't show up in the new uploaded data should be deleted...)
 	deleteSets = database[~database[checkBy].isin(new_dataset[checkBy])]
+	print(updatedSet.empty)
+	print(newSet.empty)
+	print(deleteSets.empty)
 	if not deleteSets.empty:
 		deleteRows = syn.delete(Table(syn.get(databaseSynId), deleteSets))
 	else:
@@ -117,12 +120,12 @@ def _updateRows(database_record, new_dataset, checkBy):
 	if all([old == new for old, new in zip(database_record.values, new_record.values[0])]):
 		#Make all values in the new record null so its removed in the upload
 		for i in new_record:
-			new_record[i] = np.nan
+			new_record[i] = pd.np.nan
 	else:
 		#Have to use a for loop because there are integers in the series, can't do comparison
 		for i in new_record:
 			if str(new_record[i].values[0]) == "-NAN":
-				new_record[i] = np.nan
+				new_record[i] = pd.np.nan
 	return(list(new_record.values[0]))
 
 ########################################################################
@@ -134,16 +137,15 @@ def formatSEG(filePath,center,newPath):
 	newsamples = [checkGenieId(i,center) for i in seg['ID']]
 	seg['ID'] = newsamples
 	seg = seg.drop_duplicates()
-	seg.rename({'LOC.START':'LOCSTART','LOC.END':'LOCEND','SEG.MEAN':'SEGMEAN'})
+	seg = seg.rename(columns= {'LOC.START':'LOCSTART','LOC.END':'LOCEND','SEG.MEAN':'SEGMEAN','NUM.MARK':'NUMMARK'})
 	seg['UNIQUE_KEY'] = seg['ID'] + seg['CHROM'] + seg['LOCSTART'].astype(str)  + seg['LOCEND'].astype(str)
+	seg['CENTER'] = center
 
 	databaseSynId = "syn7893341"
 	checkBy = "UNIQUE_KEY"
-	seg_database = syn.tableQuery('SELECT * FROM %s where %s in (%s)' % (databaseSynId, checkBy, ",".join("'" + seg[checkBy]+"'")))
-	seg_database = seg_database.asDataFrame()[cols]
+	seg_database = syn.tableQuery("SELECT * FROM %s where CENTER ='%s'" % (databaseSynId, center))
+	seg_database = seg_database.asDataFrame()[seg.columns]
 
-	#newClinical[seqColumn + "_NUMERICAL"] = [int(year) if checkInt(year) else np.nan for year in newClinical[seqColumn]]
-	Fusion = Fusion[cols]
 	updateDatabase(seg_database, seg, databaseSynId, checkBy)
 #def updateDatabase(database, new_dataset, databaseSynId, checkBy):
 
