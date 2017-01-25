@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import re
 import subprocess
+import validateGENIE
 
 syn = synapseclient.login()
 

@@ -139,14 +139,15 @@ def hgncRestCall(path):
         return(False, None)
 
 # Validation of gene names
-def validateSymbol(gene):
+def validateSymbol(gene, returnMapping=False):
     """
     This function does validation of symbols
 
-    :params gene:     Gene symbol
+    :params gene:               Gene symbol
+    :params returnMapping:      Return mapping of old gene to new gene
 
-    :returns:         Check if the provided gene name is a correct symbol and print out genes 
-                      that need to be remapped or can't be mapped to anything
+    :returns:                   Check if the provided gene name is a correct symbol and print out genes 
+                                that need to be remapped or can't be mapped to anything
     """
     path = '/fetch/symbol/%s' %  gene
     verified, symbol = hgncRestCall(path)
@@ -167,7 +168,10 @@ def validateSymbol(gene):
                 print("%s can be mapped to different symbols: %s. Please correct." % (gene, ", ".join(symbol)))
             else:
                 print("%s will be remapped to %s" % (gene, symbol[0]))
-                return(True)
+                if returnMapping:
+                    return({gene, symbol[0]})
+                else:
+                    return(True)
         return(False)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
