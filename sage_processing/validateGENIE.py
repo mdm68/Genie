@@ -562,7 +562,7 @@ def validateFileName(fileType, file, center):
 
     :returns:  True if filenames are correct
     """
-    VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
+    VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s",
                          'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
                          'vcf':"GENIE-%s-",
                          'cnv':"data_CNA_%s.txt",
@@ -585,6 +585,8 @@ def validateFileName(fileType, file, center):
             assert os.path.basename(file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId.vcf!" % center 
         elif fileType == "bed":
             assert os.path.basename(file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % center 
+        elif fileType == "maf":
+            assert os.path.basename(file[0]).startswith(formatting), "MAF filename must be in this format: data_mutations_extended_%s[_optionaltext].txt!" % center 
         else:
             assert os.path.basename(file[0]) == formatting, "%s filename must be: %s!" % (fileType, formatting)
     return(True)
