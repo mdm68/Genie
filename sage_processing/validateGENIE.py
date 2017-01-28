@@ -139,14 +139,15 @@ def hgncRestCall(path):
         return(False, None)
 
 # Validation of gene names
-def validateSymbol(gene):
+def validateSymbol(gene, returnMapping=False):
     """
     This function does validation of symbols
 
-    :params gene:     Gene symbol
+    :params gene:               Gene symbol
+    :params returnMapping:      Return mapping of old gene to new gene
 
-    :returns:         Check if the provided gene name is a correct symbol and print out genes 
-                      that need to be remapped or can't be mapped to anything
+    :returns:                   Check if the provided gene name is a correct symbol and print out genes 
+                                that need to be remapped or can't be mapped to anything
     """
     path = '/fetch/symbol/%s' %  gene
     verified, symbol = hgncRestCall(path)
@@ -167,7 +168,10 @@ def validateSymbol(gene):
                 print("%s can be mapped to different symbols: %s. Please correct." % (gene, ", ".join(symbol)))
             else:
                 print("%s will be remapped to %s" % (gene, symbol[0]))
-                return(True)
+                if returnMapping:
+                    return({gene, symbol[0]})
+                else:
+                    return(True)
         return(False)
 
 def validateClinical(clinicalFilePath,oncotree_mapping,sampleType_mapping,ethnicity_mapping,race_mapping,sex_mapping,clinicalSamplePath=None):
@@ -558,7 +562,7 @@ def validateFileName(fileType, file, center):
 
     :returns:  True if filenames are correct
     """
-    VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s.txt",
+    VALIDATE_FILENAME = {'maf':"data_mutations_extended_%s",
                          'clinical': ["data_clinical_supp_%s.txt", "data_clinical_supp_sample_%s.txt", "data_clinical_supp_patient_%s.txt"],
                          'vcf':"GENIE-%s-",
                          'cnv':"data_CNA_%s.txt",
@@ -581,6 +585,8 @@ def validateFileName(fileType, file, center):
             assert os.path.basename(file[0]).startswith(formatting), "VCF filename must be in this format: GENIE-%s-patientId-sampleId.vcf!" % center 
         elif fileType == "bed":
             assert os.path.basename(file[0]).startswith(formatting), "BED filename must be in this format: %s-SEQASSAYID.bed!" % center 
+        elif fileType == "maf":
+            assert os.path.basename(file[0]).startswith(formatting), "MAF filename must be in this format: data_mutations_extended_%s[_optionaltext].txt!" % center 
         else:
             assert os.path.basename(file[0]) == formatting, "%s filename must be: %s!" % (fileType, formatting)
     return(True)
